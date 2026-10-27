@@ -145,7 +145,11 @@ pub fn tags_for(conn: &Connection, path: &str) -> rusqlite::Result<Vec<Tag>> {
          WHERE ft.path = ?1 ORDER BY t.name",
     )?;
     let rows = stmt.query_map(params![path], |r| {
-        Ok(Tag { id: r.get(0)?, name: r.get(1)?, color: r.get(2)? })
+        Ok(Tag {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            color: r.get(2)?,
+        })
     })?;
     rows.collect()
 }
@@ -155,7 +159,13 @@ pub fn get_meta(conn: &Connection, path: &str) -> rusqlite::Result<FileMeta> {
         .query_row(
             "SELECT description, keywords, rating FROM files WHERE path = ?1",
             params![path],
-            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?)),
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
         )
         .optional()?;
     let (description, keywords, rating) = row.unwrap_or_else(|| (String::new(), "[]".into(), 0));
@@ -184,7 +194,14 @@ pub fn set_meta(
             keywords = excluded.keywords,
             rating = excluded.rating,
             updated_at = excluded.updated_at",
-        params![path, parent_of(path), description, keywords_json, rating.clamp(0, 5), now_ms()],
+        params![
+            path,
+            parent_of(path),
+            description,
+            keywords_json,
+            rating.clamp(0, 5),
+            now_ms()
+        ],
     )?;
     prune_file_row(conn, path)?;
     get_meta(conn, path)
@@ -216,7 +233,12 @@ pub fn list_tags(conn: &Connection) -> rusqlite::Result<Vec<TagWithCount>> {
          FROM tags t ORDER BY t.name",
     )?;
     let rows = stmt.query_map([], |r| {
-        Ok(TagWithCount { id: r.get(0)?, name: r.get(1)?, color: r.get(2)?, count: r.get(3)? })
+        Ok(TagWithCount {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            color: r.get(2)?,
+            count: r.get(3)?,
+        })
     })?;
     rows.collect()
 }
@@ -224,16 +246,33 @@ pub fn list_tags(conn: &Connection) -> rusqlite::Result<Vec<TagWithCount>> {
 pub fn upsert_tag(conn: &Connection, name: &str, color: Option<&str>) -> rusqlite::Result<Tag> {
     let name = name.trim();
     if let Some(tag) = conn
-        .query_row("SELECT id, name, color FROM tags WHERE name = ?1", params![name], |r| {
-            Ok(Tag { id: r.get(0)?, name: r.get(1)?, color: r.get(2)? })
-        })
+        .query_row(
+            "SELECT id, name, color FROM tags WHERE name = ?1",
+            params![name],
+            |r| {
+                Ok(Tag {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    color: r.get(2)?,
+                })
+            },
+        )
         .optional()?
     {
         return Ok(tag);
     }
-    let color = color.map(str::to_string).unwrap_or_else(|| default_tag_color(name));
-    conn.execute("INSERT INTO tags (name, color) VALUES (?1, ?2)", params![name, color])?;
-    Ok(Tag { id: conn.last_insert_rowid(), name: name.to_string(), color })
+    let color = color
+        .map(str::to_string)
+        .unwrap_or_else(|| default_tag_color(name));
+    conn.execute(
+        "INSERT INTO tags (name, color) VALUES (?1, ?2)",
+        params![name, color],
+    )?;
+    Ok(Tag {
+        id: conn.last_insert_rowid(),
+        name: name.to_string(),
+        color,
+    })
 }
 
 /// Pick a stable, pleasant colour for a new tag based on its name.
@@ -242,12 +281,18 @@ fn default_tag_color(name: &str) -> String {
         "#7c8cff", "#4fc3f7", "#4dd0a1", "#a5d65c", "#ffd54f", "#ffab5e", "#ff7a85", "#f06fc0",
         "#b388ff", "#90a4ae",
     ];
-    let hash = name.to_lowercase().bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
+    let hash = name
+        .to_lowercase()
+        .bytes()
+        .fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
     PALETTE[(hash as usize) % PALETTE.len()].to_string()
 }
 
 pub fn update_tag(conn: &Connection, id: i64, name: &str, color: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE tags SET name = ?2, color = ?3 WHERE id = ?1", params![id, name.trim(), color])?;
+    conn.execute(
+        "UPDATE tags SET name = ?2, color = ?3 WHERE id = ?1",
+        params![id, name.trim(), color],
+    )?;
     Ok(())
 }
 
@@ -255,7 +300,8 @@ pub fn delete_tag(conn: &mut Connection, id: i64) -> rusqlite::Result<()> {
     let tx = conn.transaction()?;
     let paths: Vec<String> = {
         let mut stmt = tx.prepare("SELECT path FROM file_tags WHERE tag_id = ?1")?;
-        stmt.query_map(params![id], |r| r.get(0))?.collect::<Result<_, _>>()?
+        stmt.query_map(params![id], |r| r.get(0))?
+            .collect::<Result<_, _>>()?
     };
     tx.execute("DELETE FROM tags WHERE id = ?1", params![id])?;
     for p in &paths {
@@ -281,14 +327,18 @@ pub fn add_tag(conn: &mut Connection, paths: &[String], tag_name: &str) -> rusql
 pub fn remove_tag(conn: &mut Connection, paths: &[String], tag_id: i64) -> rusqlite::Result<()> {
     let tx = conn.transaction()?;
     for p in paths {
-        tx.execute("DELETE FROM file_tags WHERE path = ?1 AND tag_id = ?2", params![p, tag_id])?;
+        tx.execute(
+            "DELETE FROM file_tags WHERE path = ?1 AND tag_id = ?2",
+            params![p, tag_id],
+        )?;
         prune_file_row(&tx, p)?;
     }
     tx.commit()
 }
 
 pub fn paths_with_tag(conn: &Connection, tag_id: i64) -> rusqlite::Result<Vec<String>> {
-    let mut stmt = conn.prepare_cached("SELECT path FROM file_tags WHERE tag_id = ?1 ORDER BY path")?;
+    let mut stmt =
+        conn.prepare_cached("SELECT path FROM file_tags WHERE tag_id = ?1 ORDER BY path")?;
     let rows = stmt.query_map(params![tag_id], |r| r.get(0))?;
     rows.collect()
 }
@@ -354,8 +404,12 @@ pub fn copy_meta(conn: &Connection, from: &str, to: &str) -> rusqlite::Result<()
 }
 
 pub fn get_folder_view(conn: &Connection, path: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT settings FROM folder_views WHERE path = ?1", params![path], |r| r.get(0))
-        .optional()
+    conn.query_row(
+        "SELECT settings FROM folder_views WHERE path = ?1",
+        params![path],
+        |r| r.get(0),
+    )
+    .optional()
 }
 
 pub fn set_folder_view(conn: &Connection, path: &str, settings: &str) -> rusqlite::Result<()> {
@@ -373,8 +427,12 @@ pub fn clear_folder_view(conn: &Connection, path: &str) -> rusqlite::Result<()> 
 }
 
 pub fn get_setting(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT value FROM settings WHERE key = ?1", params![key], |r| r.get(0))
-        .optional()
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params![key],
+        |r| r.get(0),
+    )
+    .optional()
 }
 
 pub fn set_setting(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
@@ -427,7 +485,9 @@ mod tests {
         let mut conn = mem();
         let t = add_tag(&mut conn, &[r"C:\x.txt".into()], "a").unwrap();
         remove_tag(&mut conn, &[r"C:\x.txt".into()], t.id).unwrap();
-        let n: i64 = conn.query_row("SELECT count(*) FROM files", [], |r| r.get(0)).unwrap();
+        let n: i64 = conn
+            .query_row("SELECT count(*) FROM files", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(n, 0);
     }
 }

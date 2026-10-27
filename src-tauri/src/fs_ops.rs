@@ -97,7 +97,11 @@ fn entry_from(name: String, md: &fs::Metadata, symlink: bool) -> Entry {
 pub fn clean(path: &Path) -> String {
     let s = dunce::simplified(path).to_string_lossy().into_owned();
     // "C:" -> "C:\" so drive roots are usable paths
-    if s.len() == 2 && s.ends_with(':') { format!("{s}\\") } else { s }
+    if s.len() == 2 && s.ends_with(':') {
+        format!("{s}\\")
+    } else {
+        s
+    }
 }
 
 pub fn list_dir(path: &str) -> Result<DirListing, String> {
@@ -134,7 +138,11 @@ pub fn list_dir(path: &str) -> Result<DirListing, String> {
             entries.push(entry_from(name, &md, false).into());
         }
     }
-    Ok(DirListing { path: clean(&dir), entries, skipped })
+    Ok(DirListing {
+        path: clean(&dir),
+        entries,
+        skipped,
+    })
 }
 
 pub fn stat_paths(paths: &[String]) -> Vec<Entry> {
@@ -143,7 +151,9 @@ pub fn stat_paths(paths: &[String]) -> Vec<Entry> {
         .filter_map(|p| {
             let path = Path::new(p);
             let md = fs::metadata(path).ok()?;
-            let symlink = fs::symlink_metadata(path).map(|m| m.file_type().is_symlink()).unwrap_or(false);
+            let symlink = fs::symlink_metadata(path)
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false);
             let name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -161,10 +171,10 @@ pub fn resolve_path(input: &str) -> Result<String, String> {
     if s.is_empty() {
         return Err("Empty path".into());
     }
-    if s == "~" || s.starts_with("~/") || s.starts_with("~\\") {
-        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
-            s = format!("{}{}", home.to_string_lossy(), &s[1..]);
-        }
+    if (s == "~" || s.starts_with("~/") || s.starts_with("~\\"))
+        && let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))
+    {
+        s = format!("{}{}", home.to_string_lossy(), &s[1..]);
     }
     // %VAR% expansion
     let mut out = String::with_capacity(s.len());
@@ -265,14 +275,26 @@ pub fn drives() -> Vec<Drive> {
         } else {
             label
         };
-        out.push(Drive { path: root, label, kind: kind.into(), total, free });
+        out.push(Drive {
+            path: root,
+            label,
+            kind: kind.into(),
+            total,
+            free,
+        });
     }
     out
 }
 
 #[cfg(not(windows))]
 pub fn drives() -> Vec<Drive> {
-    vec![Drive { path: "/".into(), label: "Root".into(), kind: "fixed".into(), total: 0, free: 0 }]
+    vec![Drive {
+        path: "/".into(),
+        label: "Root".into(),
+        kind: "fixed".into(),
+        total: 0,
+        free: 0,
+    }]
 }
 
 /// Pick a name that doesn't exist yet in `dir`: "name", "name (2)", "name (3)"…
@@ -283,9 +305,10 @@ pub fn unique_name(dir: &Path, name: &str) -> PathBuf {
     }
     let p = Path::new(name);
     let (stem, ext) = match (p.file_stem(), p.extension()) {
-        (Some(s), Some(e)) if !name.starts_with('.') => {
-            (s.to_string_lossy().into_owned(), format!(".{}", e.to_string_lossy()))
-        }
+        (Some(s), Some(e)) if !name.starts_with('.') => (
+            s.to_string_lossy().into_owned(),
+            format!(".{}", e.to_string_lossy()),
+        ),
         _ => (name.to_string(), String::new()),
     };
     (2..)
@@ -299,7 +322,10 @@ fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name == "." || name == ".." {
         return Err("Invalid name".into());
     }
-    if let Some(c) = name.chars().find(|c| matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')) {
+    if let Some(c) = name
+        .chars()
+        .find(|c| matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
+    {
         return Err(format!("A file name can't contain '{c}'"));
     }
     Ok(())
@@ -315,7 +341,11 @@ pub fn create_folder(dir: &str, name: &str) -> Result<String, String> {
 pub fn create_file(dir: &str, name: &str) -> Result<String, String> {
     validate_name(name)?;
     let target = unique_name(Path::new(dir), name.trim());
-    fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|e| e.to_string())?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .map_err(|e| e.to_string())?;
     Ok(clean(&target))
 }
 
@@ -324,7 +354,9 @@ pub fn rename(path: &str, new_name: &str) -> Result<String, String> {
     let src = Path::new(path);
     let parent = src.parent().ok_or("Cannot rename a drive root")?;
     let dest = parent.join(new_name.trim());
-    let same_file = dest.to_string_lossy().eq_ignore_ascii_case(&src.to_string_lossy());
+    let same_file = dest
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&src.to_string_lossy());
     if dest.exists() && !same_file {
         return Err(format!("\"{}\" already exists", new_name.trim()));
     }
@@ -356,7 +388,10 @@ pub struct TransferResult {
 
 pub fn transfer(paths: &[String], dest_dir: &str, mv: bool) -> TransferResult {
     let dest_dir = Path::new(dest_dir);
-    let mut result = TransferResult { done: vec![], errors: vec![] };
+    let mut result = TransferResult {
+        done: vec![],
+        errors: vec![],
+    };
     for p in paths {
         let src = Path::new(p);
         let Some(name) = src.file_name() else {
@@ -364,7 +399,9 @@ pub fn transfer(paths: &[String], dest_dir: &str, mv: bool) -> TransferResult {
             continue;
         };
         if dest_dir.starts_with(src) {
-            result.errors.push(format!("{p}: cannot copy a folder into itself"));
+            result
+                .errors
+                .push(format!("{p}: cannot copy a folder into itself"));
             continue;
         }
         let same_dir = src.parent().map(|d| d == dest_dir).unwrap_or(false);
@@ -376,7 +413,11 @@ pub fn transfer(paths: &[String], dest_dir: &str, mv: bool) -> TransferResult {
             fs::rename(src, &dest).or_else(|_| {
                 // Cross-volume move: copy then remove.
                 copy_recursive(src, &dest)?;
-                if src.is_dir() { fs::remove_dir_all(src) } else { fs::remove_file(src) }
+                if src.is_dir() {
+                    fs::remove_dir_all(src)
+                } else {
+                    fs::remove_file(src)
+                }
             })
         } else {
             copy_recursive(src, &dest)
@@ -393,7 +434,10 @@ pub fn delete(paths: &[String], permanent: bool) -> Result<(), String> {
     if permanent {
         for p in paths {
             let path = Path::new(p);
-            let r = if fs::symlink_metadata(path).map(|m| m.is_dir()).unwrap_or(false) {
+            let r = if fs::symlink_metadata(path)
+                .map(|m| m.is_dir())
+                .unwrap_or(false)
+            {
                 fs::remove_dir_all(path)
             } else {
                 fs::remove_file(path)
@@ -430,7 +474,11 @@ pub fn places<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Vec<Place> {
         .into_iter()
         .filter_map(|(id, name, dir)| {
             let dir = dir.ok()?;
-            dir.exists().then(|| Place { id: id.into(), name: name.into(), path: clean(&dir) })
+            dir.exists().then(|| Place {
+                id: id.into(),
+                name: name.into(),
+                path: clean(&dir),
+            })
         })
         .collect()
 }
@@ -464,11 +512,19 @@ mod tests {
         fs::create_dir(d.join("dst")).unwrap();
         let listing = list_dir(&d.to_string_lossy()).unwrap();
         assert_eq!(listing.entries.len(), 2);
-        let r = transfer(&[d.join("src").to_string_lossy().into()], &d.join("dst").to_string_lossy(), false);
+        let r = transfer(
+            &[d.join("src").to_string_lossy().into()],
+            &d.join("dst").to_string_lossy(),
+            false,
+        );
         assert!(r.errors.is_empty(), "{:?}", r.errors);
         assert!(d.join("dst").join("src").join("f.txt").exists());
         // into itself is refused
-        let r = transfer(&[d.join("dst").to_string_lossy().into()], &d.join("dst").join("src").to_string_lossy(), true);
+        let r = transfer(
+            &[d.join("dst").to_string_lossy().into()],
+            &d.join("dst").join("src").to_string_lossy(),
+            true,
+        );
         assert_eq!(r.errors.len(), 1);
         fs::remove_dir_all(d).unwrap();
     }

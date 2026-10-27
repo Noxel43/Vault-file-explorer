@@ -21,14 +21,16 @@ impl DirWatcher {
         *guard = None; // drop the previous watcher first
         let emit_dir = dir.clone();
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(ev) = res {
-                if !matches!(ev.kind, notify::EventKind::Access(_)) {
-                    let _ = app.emit("fs-change", &emit_dir);
-                }
+            if let Ok(ev) = res
+                && !matches!(ev.kind, notify::EventKind::Access(_))
+            {
+                let _ = app.emit("fs-change", &emit_dir);
             }
         })
         .map_err(|e| e.to_string())?;
-        watcher.watch(Path::new(&dir), RecursiveMode::NonRecursive).map_err(|e| e.to_string())?;
+        watcher
+            .watch(Path::new(&dir), RecursiveMode::NonRecursive)
+            .map_err(|e| e.to_string())?;
         *guard = Some((dir, watcher));
         Ok(())
     }
