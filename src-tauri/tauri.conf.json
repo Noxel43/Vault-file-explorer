@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vault",
+  "productName": "Vault",
   "version": "0.1.0",
   "identifier": "com.noxel43.vault",
   "build": {
@@ -12,18 +12,31 @@
   "app": {
     "windows": [
       {
-        "title": "vault",
-        "width": 800,
-        "height": 600
+        "title": "Vault",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 760,
+        "minHeight": 480,
+        "theme": "Dark",
+        "backgroundColor": "#121316",
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi"],
+    "shortDescription": "A fast, modular file explorer",
+    "longDescription": "Vault is a modern, fast and modular file explorer with built-in tags, descriptions, keywords and instant filtering.",
+    "category": "Utility",
+    "copyright": "Copyright (c) 2026 Noxel43. MIT License.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
