@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import { api } from "../lib/api";
 import type { AppInfo, FolderView } from "../lib/types";
 import { DEFAULT_MODULES, MODULES, isInstalled, type ModuleId, type ModuleState } from "../modules/registry";
@@ -43,7 +43,7 @@ const DEFAULTS: AppSettings = {
   accent: null,
   density: "comfortable",
   defaultView: DEFAULT_VIEW,
-  confirmDelete: true,
+  confirmDelete: false,
   startLocation: "this-pc",
   lastPath: null,
   modules: DEFAULT_MODULES,

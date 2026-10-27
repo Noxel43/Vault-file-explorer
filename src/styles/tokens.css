@@ -1,0 +1,147 @@
+/*
+ * Vault design tokens.
+ * Every colour, size and radius used by the UI comes from these variables.
+ * A theme is nothing more than a block that overrides some of them — the
+ * future .vtheme format maps directly onto this list.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* surfaces, darkest to lightest */
+  --bg: #121316;
+  --bg-sunken: #0e0f12;
+  --surface: #17181c;
+  --surface-2: #1d1f24;
+  --surface-3: #25272e;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  /* lines */
+  --border: #26282f;
+  --border-strong: #353843;
+
+  /* text */
+  --text: #e6e7eb;
+  --text-dim: #a3a6b1;
+  --text-faint: #6c707c;
+  --text-on-accent: #ffffff;
+
+  /* accent + states */
+  --accent: #7c8cff;
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-softer: color-mix(in srgb, var(--accent) 10%, transparent);
+  --hover: rgba(255, 255, 255, 0.045);
+  --active: rgba(255, 255, 255, 0.08);
+  --selected: var(--accent-soft);
+  --selected-border: color-mix(in srgb, var(--accent) 55%, transparent);
+  --focus-ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  --danger: #ff6b78;
+  --warning: #ffc561;
+  --success: #4dd0a1;
+
+  /* file-type colours */
+  --ft-folder: #f2c25c;
+  --ft-image: #4fc3f7;
+  --ft-video: #f06fc0;
+  --ft-audio: #b388ff;
+  --ft-document: #6ea8ff;
+  --ft-spreadsheet: #4dd0a1;
+  --ft-presentation: #ffab5e;
+  --ft-pdf: #ff6b78;
+  --ft-text: #a3a6b1;
+  --ft-code: #a5d65c;
+  --ft-archive: #d7a86e;
+  --ft-executable: #90a4ae;
+  --ft-font: #e0b0ff;
+  --ft-model3d: #4fd1c5;
+  --ft-other: #7f8494;
+
+  /* type */
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+
+  /* geometry */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --row-h: 30px;
+  --toolbar-h: 44px;
+  --statusbar-h: 26px;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --scrollbar: #2e3039;
+  --scrollbar-hover: #3d404b;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 120ms;
+
+  color-scheme: dark;
+}
+
+[data-theme="midnight"] {
+  --bg: #000000;
+  --bg-sunken: #000000;
+  --surface: #08080a;
+  --surface-2: #0f1013;
+  --surface-3: #17181c;
+  --border: #1a1b20;
+  --border-strong: #26282f;
+  --text: #f0f1f4;
+  --text-dim: #9a9daa;
+  --text-faint: #5d606b;
+  --accent: #5ee3c1;
+  --text-on-accent: #00140f;
+  --scrollbar: #1f2026;
+  --scrollbar-hover: #2c2e36;
+}
+
+[data-theme="nord"] {
+  --bg: #2b303b;
+  --bg-sunken: #262a34;
+  --surface: #2f3542;
+  --surface-2: #353c4a;
+  --surface-3: #3e4555;
+  --border: #3b4252;
+  --border-strong: #4c566a;
+  --text: #eceff4;
+  --text-dim: #c0c7d4;
+  --text-faint: #8590a6;
+  --accent: #88c0d0;
+  --text-on-accent: #1d232c;
+  --hover: rgba(236, 239, 244, 0.05);
+  --active: rgba(236, 239, 244, 0.09);
+  --scrollbar: #434c5e;
+  --scrollbar-hover: #4c566a;
+}
+
+[data-theme="light"] {
+  --bg: #f6f7f9;
+  --bg-sunken: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f2f3f6;
+  --surface-3: #e7e9ee;
+  --overlay: rgba(20, 22, 28, 0.35);
+  --border: #e2e4ea;
+  --border-strong: #cdd0d8;
+  --text: #1b1d22;
+  --text-dim: #555a66;
+  --text-faint: #8a8f9b;
+  --accent: #4f5dff;
+  --hover: rgba(0, 0, 0, 0.04);
+  --active: rgba(0, 0, 0, 0.07);
+  --ft-folder: #e0a92a;
+  --ft-text: #6c707c;
+  --shadow: 0 8px 28px rgba(20, 22, 28, 0.14), 0 1px 3px rgba(20, 22, 28, 0.1);
+  --scrollbar: #d3d6dd;
+  --scrollbar-hover: #bfc3cc;
+  color-scheme: light;
+}
+
+[data-density="compact"] {
+  --row-h: 24px;
+  --toolbar-h: 38px;
+  --fs-md: 12px;
+}
