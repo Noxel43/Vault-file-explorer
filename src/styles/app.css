@@ -146,14 +146,14 @@ select { height: 28px; padding: 0 6px; min-width: 150px; }
 /* ------------------------------------------------------------ filter bar */
 
 .filterbar {
-  display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex-wrap: wrap; flex-shrink: 0;
   border-bottom: 1px solid var(--border); background: var(--surface);
 }
 .filterbar-spacer { flex: 1; }
 .filter-count { font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 .pattern-field {
-  display: flex; align-items: center; height: 28px; width: 260px; border-radius: var(--radius);
+  display: flex; align-items: center; height: 28px; flex: 1 1 150px; min-width: 110px; max-width: 300px; border-radius: var(--radius);
   background: var(--bg-sunken); border: 1px solid var(--border);
 }
 .pattern-field:focus-within { border-color: var(--accent); }

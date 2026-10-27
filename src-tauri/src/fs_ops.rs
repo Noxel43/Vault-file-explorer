@@ -24,11 +24,33 @@ pub struct Entry {
     pub symlink: bool,
 }
 
+/// Compact wire format for directory listings: `[name, flags, size, modified, created]`.
+/// About a third the size of named-field JSON, which matters for 100k-entry folders.
+#[derive(Debug, Serialize)]
+pub struct Packed(pub String, pub u8, pub u64, pub u64, pub u64);
+
+pub const F_DIR: u8 = 1;
+pub const F_HIDDEN: u8 = 2;
+pub const F_SYSTEM: u8 = 4;
+pub const F_READONLY: u8 = 8;
+pub const F_SYMLINK: u8 = 16;
+
+impl From<Entry> for Packed {
+    fn from(e: Entry) -> Self {
+        let flags = (e.is_dir as u8 * F_DIR)
+            | (e.hidden as u8 * F_HIDDEN)
+            | (e.system as u8 * F_SYSTEM)
+            | (e.readonly as u8 * F_READONLY)
+            | (e.symlink as u8 * F_SYMLINK);
+        Packed(e.name, flags, e.size, e.modified, e.created)
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirListing {
     pub path: String,
-    pub entries: Vec<Entry>,
+    pub entries: Vec<Packed>,
     /// Entries that could not be read (permission errors etc.).
     pub skipped: usize,
 }
@@ -104,12 +126,12 @@ pub fn list_dir(path: &str) -> Result<DirListing, String> {
                     let (h, s) = attrs(&md);
                     e.hidden |= h;
                     e.system |= s;
-                    entries.push(e);
+                    entries.push(e.into());
                 }
-                Err(_) => entries.push(entry_from(name, &md, true)),
+                Err(_) => entries.push(entry_from(name, &md, true).into()),
             }
         } else {
-            entries.push(entry_from(name, &md, false));
+            entries.push(entry_from(name, &md, false).into());
         }
     }
     Ok(DirListing { path: clean(&dir), entries, skipped })
@@ -449,6 +471,24 @@ mod tests {
         let r = transfer(&[d.join("dst").to_string_lossy().into()], &d.join("dst").join("src").to_string_lossy(), true);
         assert_eq!(r.errors.len(), 1);
         fs::remove_dir_all(d).unwrap();
+    }
+
+    /// `VAULT_BENCH_DIR=<big folder> cargo test --release bench_list -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn bench_list() {
+        let dir = std::env::var("VAULT_BENCH_DIR").expect("set VAULT_BENCH_DIR");
+        let start = std::time::Instant::now();
+        let listing = list_dir(&dir).unwrap();
+        let listed = start.elapsed();
+        let json = serde_json::to_string(&listing).unwrap();
+        println!(
+            "{} entries: list {:?}, serialize {:?} total, {} KB json",
+            listing.entries.len(),
+            listed,
+            start.elapsed(),
+            json.len() / 1024
+        );
     }
 
     #[test]

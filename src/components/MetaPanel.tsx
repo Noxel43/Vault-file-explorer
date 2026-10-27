@@ -224,6 +224,30 @@ function useMetaEditor(path: string) {
     };
   }, [path, flush]);
 
+  // Pick up changes made elsewhere (multi-select tagging, another window, …) without
+  // clobbering a description that's being typed.
+  const signature = useExplorer((s) => {
+    const m = s.meta.get(pathKey(path));
+    return m ? `${m.tagIds.join(",")}|${m.rating}|${m.hasNotes}` : "";
+  });
+  const firstSignature = useRef(true);
+  useEffect(() => {
+    if (firstSignature.current) {
+      firstSignature.current = false;
+      return;
+    }
+    if (pending.current) return;
+    let cancelled = false;
+    api.getMeta(path).then((m) => {
+      if (cancelled || pending.current) return;
+      setMeta(m);
+      if (!document.activeElement?.classList.contains("desc-input")) setDescription(m.description);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [signature, path]);
+
   const save = (patch: Partial<{ description: string; keywords: string[]; rating: number }>, delay = 0) => {
     if (!meta) return;
     const base = pending.current ?? { path, description: meta.description, keywords: meta.keywords, rating: meta.rating };
@@ -416,27 +440,33 @@ export function MetaPanel({ width }: { width: number }) {
   const selection = useMemo(() => entries.filter((e) => selected.has(e.path)), [entries, selected]);
 
   // With nothing selected, show the folder itself so it can be tagged/described too.
-  const folderEntry: Entry | null = useMemo(
-    () =>
-      isVirtual(location)
-        ? null
-        : {
-            name: baseName(location) || location,
-            path: location,
-            isDir: true,
-            size: 0,
-            modified: 0,
-            created: 0,
-            hidden: false,
-            system: false,
-            readonly: false,
-            symlink: false,
-            lower: "",
-            ext: "",
-            category: "folder",
-          },
-    [location],
-  );
+  const [folderEntry, setFolderEntry] = useState<Entry | null>(null);
+  useEffect(() => {
+    if (isVirtual(location)) return setFolderEntry(null);
+    let cancelled = false;
+    const base: Entry = {
+      name: baseName(location) || location,
+      path: location,
+      isDir: true,
+      size: 0,
+      modified: 0,
+      created: 0,
+      hidden: false,
+      system: false,
+      readonly: false,
+      symlink: false,
+      lower: "",
+      ext: "",
+      category: "folder",
+    };
+    setFolderEntry(base);
+    api.statPaths([location]).then(([st]) => {
+      if (!cancelled && st) setFolderEntry({ ...base, ...st, name: base.name, path: location, isDir: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location]);
 
   let body: React.ReactNode;
   if (selection.length === 1) body = <SingleItem key={selection[0].path} entry={selection[0]} />;

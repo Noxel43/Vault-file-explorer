@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { categoryOf, extOf } from "../lib/fileTypes";
-import { EMPTY_FILTERS, applyFiltersAndSort, type Filters } from "../lib/filters";
+import { EMPTY_FILTERS, applyFilters, sortEntries, type Filters } from "../lib/filters";
 import { THIS_PC, baseName, isVirtual, join, parentOf, pathKey, tagIdOf } from "../lib/path";
-import type { Drive, Entry, FolderView, MetaSummary, Place, RawEntry, TagWithCount } from "../lib/types";
+import { unpack, type Drive, type Entry, type FolderView, type MetaSummary, type Place, type RawEntry, type TagWithCount } from "../lib/types";
 import { DEFAULT_VIEW, useSettings } from "./settings";
 
 export interface Toast {
@@ -101,15 +101,30 @@ let loadToken = 0;
 let viewSaveTimer: number | undefined;
 let toastId = 0;
 
+// Sorting 100k names costs ~50ms, filtering ~5ms. Cache the sorted list so typing in the
+// filter box only pays for the filter.
+let sortCache: { entries: Entry[]; key: string; sorted: Entry[] } | null = null;
+function sortedFor(entries: Entry[], view: FolderView): Entry[] {
+  const key = `${view.sortKey}|${view.sortDir}|${view.foldersFirst}`;
+  if (sortCache?.entries !== entries || sortCache.key !== key) {
+    sortCache = { entries, key, sorted: sortEntries(entries, view) };
+  }
+  return sortCache.sorted;
+}
+
 export const useExplorer = create<ExplorerStore>((set, get) => {
-  /** Re-run filter + sort; call after anything that changes entries, filters, view or meta. */
+  /** Re-run filter (+ sort when needed); call after anything that changes entries, filters, view or meta. */
   const recompute = () => {
     const { entries, filters, view, meta, selected } = get();
-    const { visible, patternError } = applyFiltersAndSort(entries, filters, view, meta);
-    // Drop selections that no longer exist in the folder.
-    const existing = new Set(entries.map((e) => e.path));
-    const nextSel = new Set([...selected].filter((p) => existing.has(p)));
-    set({ visible, patternError, selected: nextSel.size === selected.size ? selected : nextSel });
+    const { visible, patternError } = applyFilters(sortedFor(entries, view), filters, view, meta);
+    // Only visible items stay selected, so actions like Delete never touch files a filter hides.
+    let nextSel = selected;
+    if (selected.size) {
+      const shown = new Set(visible.map((e) => e.path));
+      const kept = [...selected].filter((p) => shown.has(p));
+      if (kept.length !== selected.size) nextSel = new Set(kept);
+    }
+    set({ visible, patternError, selected: nextSel });
   };
 
   const load = async (path: string, keepSelection: boolean, selectPath?: string) => {
@@ -141,7 +156,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
           api.getFolderMeta(path).catch(() => [] as MetaSummary[]),
         ]);
         location = listing.path;
-        entries = listing.entries.map((r) => enrich(r, listing.path));
+        entries = listing.entries.map((p) => enrich(unpack(p), listing.path));
         meta = new Map(folderMeta.map((m) => [pathKey(m.path), m]));
         let parsed: Partial<FolderView> | null = null;
         try {
@@ -352,7 +367,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
     startRename: (path) => {
       const target = path ?? get().focus ?? [...get().selected][0];
-      if (target && !isVirtual(get().location)) set({ renaming: target });
+      if (target && get().location !== THIS_PC) set({ renaming: target });
     },
 
     cancelRename: () => set({ renaming: null }),

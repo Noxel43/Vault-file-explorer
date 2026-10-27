@@ -22,10 +22,27 @@ export interface Entry extends RawEntry {
   category: Category;
 }
 
+/** `[name, flags, size, modified, created]` — see `Packed` in fs_ops.rs. */
+export type PackedEntry = [string, number, number, number, number];
+
 export interface DirListing {
   path: string;
-  entries: RawEntry[];
+  entries: PackedEntry[];
   skipped: number;
+}
+
+export function unpack([name, flags, size, modified, created]: PackedEntry): RawEntry {
+  return {
+    name,
+    size,
+    modified,
+    created,
+    isDir: (flags & 1) !== 0,
+    hidden: (flags & 2) !== 0,
+    system: (flags & 4) !== 0,
+    readonly: (flags & 8) !== 0,
+    symlink: (flags & 16) !== 0,
+  };
 }
 
 export interface Drive {

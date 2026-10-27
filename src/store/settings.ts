@@ -18,7 +18,7 @@ export const DEFAULT_VIEW: FolderView = {
   foldersFirst: true,
   showHidden: false,
   iconSize: 96,
-  columns: { name: 360, modified: 170, type: 110, size: 90, tags: 140 },
+  columns: { name: 260, modified: 160, type: 100, size: 84, tags: 140 },
 };
 
 export interface AppSettings {

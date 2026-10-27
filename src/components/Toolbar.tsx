@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { activeFilterCount } from "../lib/filters";
-import { THIS_PC, crumbs, isVirtual, tagIdOf } from "../lib/path";
+import { THIS_PC, crumbs, isVirtual, tagIdOf, type Crumb } from "../lib/path";
 import type { ViewMode } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule, useSettings } from "../store/settings";
@@ -46,55 +46,63 @@ function IconButton({
   );
 }
 
+const ELLIPSIS = "vault:ellipsis";
+
+function PathInput({ location }: { location: string }) {
+  const goToInput = useExplorer((s) => s.goToInput);
+  const setEditing = useUi((s) => s.setEditingPath);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Initialised synchronously so keystrokes typed right after Ctrl+L aren't lost.
+  const [draft, setDraft] = useState(() => (isVirtual(location) ? "" : location));
+
+  useEffect(() => inputRef.current?.select(), []);
+
+  return (
+    <div className="pathbar editing">
+      <input
+        ref={inputRef}
+        autoFocus
+        className="path-input"
+        value={draft}
+        spellCheck={false}
+        placeholder="Type a path, e.g. C:\Users or %APPDATA%"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={async (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (await goToInput(draft)) setEditing(false);
+          } else if (e.key === "Escape") {
+            setEditing(false);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 function PathBar() {
   const location = useExplorer((s) => s.location);
   const tags = useExplorer((s) => s.tags);
   const navigate = useExplorer((s) => s.navigate);
-  const goToInput = useExplorer((s) => s.goToInput);
   const editing = useUi((s) => s.editingPath);
   const setEditing = useUi((s) => s.setEditingPath);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState("");
 
-  useEffect(() => {
-    if (editing) {
-      setDraft(isVirtual(location) ? "" : location);
-      requestAnimationFrame(() => inputRef.current?.select());
-    }
-  }, [editing, location]);
-
-  if (editing) {
-    return (
-      <div className="pathbar editing">
-        <input
-          ref={inputRef}
-          className="path-input"
-          value={draft}
-          spellCheck={false}
-          placeholder="Type a path, e.g. C:\Users or %APPDATA%"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => setEditing(false)}
-          onKeyDown={async (e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (await goToInput(draft)) setEditing(false);
-            } else if (e.key === "Escape") {
-              setEditing(false);
-            }
-          }}
-        />
-      </div>
-    );
-  }
+  if (editing) return <PathInput location={location} />;
 
   const tagId = tagIdOf(location);
-  const parts =
+  let parts: (Crumb & { title?: string })[] =
     tagId != null
       ? [
           { label: "Tags", path: "" },
           { label: tags.find((t) => t.id === tagId)?.name ?? "Tag", path: location },
         ]
       : crumbs(location);
+  // Deep paths: keep the root, drive and last three folders; "…" opens the full path for editing.
+  if (parts.length > 6) {
+    const hidden = parts.slice(2, -3);
+    parts = [...parts.slice(0, 2), { label: "…", path: ELLIPSIS, title: hidden.map((p) => p.label).join("\\") }, ...parts.slice(-3)];
+  }
 
   return (
     <div className="pathbar" onClick={(e) => e.target === e.currentTarget && setEditing(true)} title="Click to type a path (Ctrl+L)">
@@ -103,8 +111,9 @@ function PathBar() {
           {i > 0 && <ChevronRight size={13} className="crumb-sep" />}
           <button
             className={`crumb${i === parts.length - 1 ? " current" : ""}`}
-            onClick={() => c.path && navigate(c.path)}
+            onClick={() => (c.path === ELLIPSIS ? setEditing(true) : c.path && navigate(c.path))}
             disabled={!c.path}
+            title={c.title}
           >
             {c.label}
           </button>

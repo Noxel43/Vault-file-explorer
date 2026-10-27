@@ -220,7 +220,10 @@ function DetailsHeader({ widths, onResize, onResizeEnd, showTags }: {
           <span>{c.label}</span>
           {view.sortKey === c.sort &&
             (view.sortDir === "asc" ? <ArrowUp size={12} className="sort-arrow" /> : <ArrowDown size={12} className="sort-arrow" />)}
-          <span className="col-resize" onPointerDown={(e) => startResize(e, c.key)} onClick={(e) => e.stopPropagation()} />
+          {/* Name fills the remaining width; the other columns are resizable. */}
+          {c.key !== "name" && (
+            <span className="col-resize" onPointerDown={(e) => startResize(e, c.key)} onClick={(e) => e.stopPropagation()} />
+          )}
         </div>
       ))}
     </div>
@@ -236,7 +239,13 @@ function RowsView({ compact }: { compact: boolean }) {
   const view = useExplorer((s) => s.view);
   const setView = useExplorer((s) => s.setView);
   const density = useSettings((s) => s.density);
-  const showTags = useModule("metadata") && !compact;
+  const metadataOn = useModule("metadata");
+  // Only spend width on a Tags column when something in this folder is tagged.
+  const anyTagged = useExplorer((s) => {
+    for (const m of s.meta.values()) if (m.tagIds.length) return true;
+    return false;
+  });
+  const showTags = metadataOn && !compact && anyTagged;
   const entryTags = useEntryTags();
   const parentRef = useRef<HTMLDivElement>(null);
   const rowH = density === "compact" ? 24 : 30;
@@ -263,12 +272,12 @@ function RowsView({ compact }: { compact: boolean }) {
 
   const template = compact
     ? "minmax(0, 1fr)"
-    : [`minmax(${widths.name}px, 1fr)`, `${widths.modified}px`, `${widths.type}px`, `${widths.size}px`]
+    : [`minmax(140px, 1fr)`, `${widths.modified}px`, `${widths.type}px`, `${widths.size}px`]
         .concat(showTags ? [`${widths.tags}px`] : [])
         .join(" ");
   const minWidth = compact
     ? undefined
-    : widths.name + widths.modified + widths.type + widths.size + (showTags ? widths.tags : 0) + 24;
+    : 140 + widths.modified + widths.type + widths.size + (showTags ? widths.tags : 0) + 36;
 
   return (
     <div

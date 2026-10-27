@@ -110,10 +110,40 @@ export interface ApplyResult {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-export function applyFiltersAndSort(
-  entries: Entry[],
+type SortView = Pick<FolderView, "sortKey" | "sortDir" | "foldersFirst">;
+
+/** Sort a copy of `entries`. Expensive for huge folders, so callers cache the result. */
+export function sortEntries(entries: Entry[], view: SortView): Entry[] {
+  const dir = view.sortDir === "asc" ? 1 : -1;
+  const byName = (a: Entry, b: Entry) => collator.compare(a.name, b.name);
+  let cmp: (a: Entry, b: Entry) => number;
+  switch (view.sortKey) {
+    case "modified":
+      cmp = (a, b) => a.modified - b.modified || byName(a, b);
+      break;
+    case "created":
+      cmp = (a, b) => a.created - b.created || byName(a, b);
+      break;
+    case "size":
+      cmp = (a, b) => a.size - b.size || byName(a, b);
+      break;
+    case "type":
+      cmp = (a, b) => (a.ext < b.ext ? -1 : a.ext > b.ext ? 1 : 0) || byName(a, b);
+      break;
+    default:
+      cmp = byName;
+  }
+  return [...entries].sort((a, b) => {
+    if (view.foldersFirst && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return cmp(a, b) * dir;
+  });
+}
+
+/** Filter an already-sorted list; order is preserved, so no re-sort is needed. */
+export function applyFilters(
+  sorted: Entry[],
   f: Filters,
-  view: FolderView,
+  view: Pick<FolderView, "showHidden">,
   meta: Map<string, MetaSummary>,
 ): ApplyResult {
   const terms = f.query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -125,7 +155,7 @@ export function applyFiltersAndSort(
   const tagSet = f.tagIds.length ? f.tagIds : null;
   const sizeActive = f.sizeMin != null || f.sizeMax != null;
 
-  const visible = entries.filter((e) => {
+  const visible = sorted.filter((e) => {
     if (!view.showHidden && (e.hidden || e.system)) return false;
     for (const t of terms) if (!e.lower.includes(t)) return false;
     if (matchPattern && !matchPattern(e.name)) return false;
@@ -148,30 +178,6 @@ export function applyFiltersAndSort(
       if (!ok) return false;
     }
     return true;
-  });
-
-  const dir = view.sortDir === "asc" ? 1 : -1;
-  const byName = (a: Entry, b: Entry) => collator.compare(a.name, b.name);
-  let cmp: (a: Entry, b: Entry) => number;
-  switch (view.sortKey) {
-    case "modified":
-      cmp = (a, b) => a.modified - b.modified || byName(a, b);
-      break;
-    case "created":
-      cmp = (a, b) => a.created - b.created || byName(a, b);
-      break;
-    case "size":
-      cmp = (a, b) => a.size - b.size || byName(a, b);
-      break;
-    case "type":
-      cmp = (a, b) => (a.ext < b.ext ? -1 : a.ext > b.ext ? 1 : 0) || byName(a, b);
-      break;
-    default:
-      cmp = byName;
-  }
-  visible.sort((a, b) => {
-    if (view.foldersFirst && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return cmp(a, b) * dir;
   });
 
   return { visible, patternError };

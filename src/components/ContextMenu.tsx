@@ -133,7 +133,7 @@ export function ContextMenu() {
         onClick: () => api.revealPath(sel[0].path),
       },
       "sep",
-      { label: "Cut", icon: <Scissors size={14} />, shortcut: "Ctrl+X", onClick: () => s.copySelected("cut"), disabled: virtual },
+      { label: "Cut", icon: <Scissors size={14} />, shortcut: "Ctrl+X", onClick: () => s.copySelected("cut") },
       { label: "Copy", icon: <Copy size={14} />, shortcut: "Ctrl+C", onClick: () => s.copySelected("copy") },
       {
         label: "Copy path",
@@ -142,13 +142,13 @@ export function ContextMenu() {
         onClick: () => navigator.clipboard.writeText(sel.map((e) => e.path).join("\n")),
       },
       "sep",
-      { label: "Rename", icon: <Pencil size={14} />, shortcut: "F2", onClick: () => s.startRename(single?.path), disabled: !single || virtual },
+      { label: "Rename", icon: <Pencil size={14} />, shortcut: "F2", onClick: () => s.startRename(single?.path), disabled: !single },
       { label: "Delete", icon: <Trash size={14} />, shortcut: "Del", onClick: () => requestDelete(false), danger: true },
       { label: "Delete permanently", icon: <Trash size={14} />, shortcut: "Shift+Del", onClick: () => requestDelete(true), danger: true },
     ];
     if (metaOn) {
       items.push("sep", {
-        label: "Add tagâ€¦",
+        label: "Add tag…",
         icon: <Tag size={14} />,
         onClick: () => {
           update({ panelOpen: true });
