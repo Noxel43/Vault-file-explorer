@@ -227,6 +227,27 @@ pub fn folder_meta(conn: &Connection, dir: &str) -> rusqlite::Result<Vec<MetaSum
     rows.collect()
 }
 
+/// Everything annotated, wherever it is. The table only holds files with metadata, so it stays small.
+pub fn all_meta(conn: &Connection) -> rusqlite::Result<Vec<MetaSummary>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT f.path, f.rating, (f.description <> '' OR f.keywords <> '[]'),
+                (SELECT group_concat(tag_id) FROM file_tags ft WHERE ft.path = f.path)
+         FROM files f",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        let tag_csv: Option<String> = r.get(3)?;
+        Ok(MetaSummary {
+            path: r.get(0)?,
+            rating: r.get(1)?,
+            has_notes: r.get(2)?,
+            tag_ids: tag_csv
+                .map(|s| s.split(',').filter_map(|t| t.parse().ok()).collect())
+                .unwrap_or_default(),
+        })
+    })?;
+    rows.collect()
+}
+
 pub fn list_tags(conn: &Connection) -> rusqlite::Result<Vec<TagWithCount>> {
     let mut stmt = conn.prepare_cached(
         "SELECT t.id, t.name, t.color, (SELECT count(*) FROM file_tags ft WHERE ft.tag_id = t.id)

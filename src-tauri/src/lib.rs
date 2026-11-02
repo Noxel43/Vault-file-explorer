@@ -1,5 +1,6 @@
-﻿mod db;
+mod db;
 mod fs_ops;
+mod index;
 mod preview;
 mod watcher;
 
@@ -9,7 +10,7 @@ use std::sync::{Mutex, MutexGuard};
 use rusqlite::Connection;
 use serde::Serialize;
 use tauri::ipc::Response;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 struct AppState {
@@ -113,11 +114,16 @@ fn create_file(dir: String, name: String) -> CmdResult<String> {
 }
 
 #[tauri::command]
-fn rename_path(state: State<AppState>, path: String, new_name: String) -> CmdResult<String> {
-    let dest = fs_ops::rename(&path, &new_name)?;
-    let mut conn = state.conn()?;
-    db::move_path(&mut conn, &path, &dest).map_err(err)?;
-    Ok(dest)
+async fn rename_path(app: AppHandle, path: String, new_name: String) -> CmdResult<String> {
+    blocking(move || {
+        let dest = fs_ops::rename(&path, &new_name)?;
+        let state = app.state::<AppState>();
+        db::move_path(&mut *state.conn()?, &path, &dest).map_err(err)?;
+        // Searches reload right after this, so the index can't wait for the watcher.
+        app.state::<index::Index>().touch([path, dest.clone()]);
+        Ok(dest)
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -130,7 +136,7 @@ async fn delete_paths(app: AppHandle, paths: Vec<String>, permanent: bool) -> Cm
         let mut conn = state.conn()?;
         db::forget_paths(&mut conn, &paths).map_err(err)?;
     }
-    Ok(())
+    blocking(move || app.state::<index::Index>().touch(paths)).await
 }
 
 #[tauri::command]
@@ -142,15 +148,23 @@ async fn transfer_paths(
 ) -> CmdResult<fs_ops::TransferResult> {
     let mv = mode == "move";
     let result = blocking(move || fs_ops::transfer(&paths, &dest_dir, mv)).await?;
-    let state = app.state::<AppState>();
-    let mut conn = state.conn()?;
-    for (from, to) in &result.done {
-        if mv {
-            db::move_path(&mut conn, from, to).map_err(err)?;
-        } else {
-            db::copy_meta(&conn, from, to).map_err(err)?;
+    {
+        let state = app.state::<AppState>();
+        let mut conn = state.conn()?;
+        for (from, to) in &result.done {
+            if mv {
+                db::move_path(&mut conn, from, to).map_err(err)?;
+            } else {
+                db::copy_meta(&conn, from, to).map_err(err)?;
+            }
         }
     }
+    let touched: Vec<String> = result
+        .done
+        .iter()
+        .flat_map(|(from, to)| [from.clone(), to.clone()])
+        .collect();
+    blocking(move || app.state::<index::Index>().touch(touched)).await?;
     Ok(result)
 }
 
@@ -177,7 +191,71 @@ async fn file_thumbnail(path: String, size: i32) -> CmdResult<Response> {
     Ok(Response::new(png))
 }
 
+// ---------------------------------------------------------------- index & search
+
+#[tauri::command]
+async fn index_start(app: AppHandle, roots: Vec<String>, excludes: Vec<String>) -> CmdResult<()> {
+    blocking(move || {
+        let emitter = app.clone();
+        app.state::<index::Index>()
+            .start(&roots, &excludes, move |status| {
+                let _ = emitter.emit("index-status", status);
+            });
+    })
+    .await
+}
+
+#[tauri::command]
+async fn index_stop(app: AppHandle) -> CmdResult<()> {
+    blocking(move || app.state::<index::Index>().stop()).await
+}
+
+#[tauri::command]
+async fn index_rebuild(app: AppHandle) -> CmdResult<()> {
+    blocking(move || app.state::<index::Index>().rebuild()).await?
+}
+
+#[tauri::command]
+fn index_status(index: State<index::Index>) -> index::IndexStatus {
+    index.status()
+}
+
+#[tauri::command]
+async fn search(
+    app: AppHandle,
+    params: index::SearchParams,
+    tag_ids: Vec<i64>,
+    match_all_tags: bool,
+) -> CmdResult<index::SearchResults> {
+    blocking(move || {
+        let index = app.state::<index::Index>();
+        let allowed = if tag_ids.is_empty() {
+            None
+        } else {
+            let state = app.state::<AppState>();
+            let mut allowed: Option<std::collections::HashSet<u32>> = None;
+            for tag_id in tag_ids {
+                let paths = db::paths_with_tag(&*state.conn()?, tag_id).map_err(err)?;
+                let ids = index.ids_of(&paths);
+                allowed = Some(match allowed {
+                    None => ids,
+                    Some(so_far) if match_all_tags => so_far.intersection(&ids).copied().collect(),
+                    Some(so_far) => so_far.union(&ids).copied().collect(),
+                });
+            }
+            allowed
+        };
+        Ok(index.search(params, allowed))
+    })
+    .await?
+}
+
 // ---------------------------------------------------------------- metadata
+
+#[tauri::command]
+fn all_meta(state: State<AppState>) -> CmdResult<Vec<db::MetaSummary>> {
+    db::all_meta(&*state.conn()?).map_err(err)
+}
 
 #[tauri::command]
 fn get_meta(state: State<AppState>, path: String) -> CmdResult<db::FileMeta> {
@@ -280,6 +358,7 @@ pub fn run() {
                 data_dir: fs_ops::clean(&data_dir),
             });
             app.manage(watcher::DirWatcher::default());
+            app.manage(index::Index::new(&data_dir));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -300,6 +379,12 @@ pub fn run() {
             unwatch_dir,
             read_text_preview,
             file_thumbnail,
+            index_start,
+            index_stop,
+            index_rebuild,
+            index_status,
+            search,
+            all_meta,
             get_meta,
             set_meta,
             get_folder_meta,

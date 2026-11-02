@@ -4192,8 +4192,10 @@ name = "vault"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "memchr",
  "notify",
  "png",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

@@ -76,7 +76,7 @@ fn attrs(_md: &fs::Metadata) -> (bool, bool) {
     (false, false)
 }
 
-fn entry_from(name: String, md: &fs::Metadata, symlink: bool) -> Entry {
+pub fn entry_from(name: String, md: &fs::Metadata, symlink: bool) -> Entry {
     let (hidden, system) = attrs(md);
     let hidden = hidden || (cfg!(not(windows)) && name.starts_with('.'));
     Entry {
