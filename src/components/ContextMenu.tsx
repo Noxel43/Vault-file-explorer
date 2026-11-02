@@ -111,6 +111,7 @@ export function ContextMenu() {
   const close = useUi((s) => s.closeContextMenu);
   const s = useExplorer();
   const metaOn = useModule("metadata");
+  const previewOn = useModule("preview");
   const update = useSettings((x) => x.update);
 
   if (!menu) return null;
@@ -127,6 +128,9 @@ export function ContextMenu() {
         shortcut: "Enter",
         onClick: () => sel.forEach((e, i) => (e.isDir ? i === 0 && s.open(e) : s.open(e))),
       },
+      ...(previewOn
+        ? [{ label: "Preview", icon: <Eye size={14} />, shortcut: "Alt+P", onClick: () => update({ previewOpen: true }) }]
+        : []),
       {
         label: "Show in Windows Explorer",
         icon: <ExternalLink size={14} />,

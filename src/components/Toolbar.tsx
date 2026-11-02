@@ -3,6 +3,7 @@
   ArrowRight,
   ArrowUp,
   ChevronRight,
+  Eye,
   FolderPlus,
   LayoutGrid,
   List,
@@ -169,6 +170,8 @@ export function Toolbar() {
   const s = useExplorer();
   const filtersOn = useModule("filters");
   const metaOn = useModule("metadata");
+  const previewOn = useModule("preview");
+  const previewOpen = useSettings((x) => x.previewOpen);
   const filterBarOpen = useSettings((x) => x.filterBarOpen);
   const sidebarOpen = useSettings((x) => x.sidebarOpen);
   const panelOpen = useSettings((x) => x.panelOpen);
@@ -230,6 +233,11 @@ export function Toolbar() {
             </button>
           ))}
         </div>
+        {previewOn && (
+          <IconButton title="Preview pane (Alt+P)" onClick={() => update({ previewOpen: !previewOpen })} active={previewOpen}>
+            <Eye size={16} />
+          </IconButton>
+        )}
         {metaOn && (
           <IconButton title="Details panel (Ctrl+I)" onClick={() => update({ panelOpen: !panelOpen })} active={panelOpen}>
             <PanelRight size={16} />

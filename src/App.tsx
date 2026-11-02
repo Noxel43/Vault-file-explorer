@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ContextMenu } from "./components/ContextMenu";
 import { FileView } from "./components/FileView";
 import { FilterBar } from "./components/FilterBar";
@@ -8,6 +8,7 @@ import { ConfirmDialog, Toasts } from "./components/Overlays";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { PreviewPane } from "./components/preview/PreviewPane";
 import { ThisPc } from "./components/ThisPc";
 import { Toolbar } from "./components/Toolbar";
 import { useShortcuts } from "./hooks/useShortcuts";
@@ -17,6 +18,9 @@ import { useModule, useSettings } from "./store/settings";
 import { api } from "./lib/api";
 import "./styles/tokens.css";
 import "./styles/app.css";
+
+const MIN_MAIN_WIDTH = 320;
+const MIN_PREVIEW_WIDTH = 220;
 
 /** Drag handle between panes. `side` says which edge of the handle the pane sits on. */
 function Resizer({ value, onChange, side, min, max }: {
@@ -49,6 +53,16 @@ function Resizer({ value, onChange, side, min, max }: {
       }}
     />
   );
+}
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }
 
 function useAppearance() {
@@ -95,12 +109,16 @@ export default function App() {
   const sidebarWidth = useSettings((s) => s.sidebarWidth);
   const panelOpen = useSettings((s) => s.panelOpen);
   const panelWidth = useSettings((s) => s.panelWidth);
+  const previewOpen = useSettings((s) => s.previewOpen);
+  const previewWidth = useSettings((s) => s.previewWidth);
   const filterBarOpen = useSettings((s) => s.filterBarOpen);
   const update = useSettings((s) => s.update);
   const location = useExplorer((s) => s.location);
   const filtersOn = useModule("filters");
   const metadataOn = useModule("metadata");
+  const previewOn = useModule("preview");
   const statusOn = useModule("statusbar");
+  const windowWidth = useWindowWidth();
 
   useAppearance();
   useLiveUpdates();
@@ -118,6 +136,14 @@ export default function App() {
 
   const onThisPc = location === THIS_PC;
 
+  // The file list always keeps some room: in a narrow window the preview gives up width first,
+  // then the metadata panel steps aside until there is space for both.
+  const showPreview = previewOn && previewOpen;
+  const room = windowWidth - (sidebarOpen ? sidebarWidth : 0) - MIN_MAIN_WIDTH;
+  const showPanel = metadataOn && panelOpen && (!showPreview || room - panelWidth >= MIN_PREVIEW_WIDTH);
+  const previewMax = Math.max(MIN_PREVIEW_WIDTH, room - (showPanel ? panelWidth : 0));
+  const previewShown = Math.min(previewWidth, previewMax);
+
   return (
     <div className="app" onContextMenu={(e) => e.preventDefault()}>
       <Toolbar />
@@ -132,7 +158,19 @@ export default function App() {
           {filtersOn && filterBarOpen && !onThisPc && <FilterBar />}
           {onThisPc ? <ThisPc /> : <FileView />}
         </main>
-        {metadataOn && panelOpen && (
+        {showPreview && (
+          <>
+            <Resizer
+              value={previewShown}
+              onChange={(v) => update({ previewWidth: v })}
+              side="right"
+              min={MIN_PREVIEW_WIDTH}
+              max={previewMax}
+            />
+            <PreviewPane width={previewShown} />
+          </>
+        )}
+        {showPanel && (
           <>
             <Resizer value={panelWidth} onChange={(v) => update({ panelWidth: v })} side="right" min={240} max={560} />
             <MetaPanel width={panelWidth} />

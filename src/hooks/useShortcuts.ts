@@ -44,14 +44,44 @@ export function useShortcuts() {
       if (e.altKey && key === "ArrowLeft") return handled(ex.back);
       if (e.altKey && key === "ArrowRight") return handled(ex.forward);
       if (e.altKey && key === "ArrowUp") return handled(ex.up);
+      if (e.altKey && key.toLowerCase() === "p" && settings.enabled("preview"))
+        return handled(() => settings.update({ previewOpen: !settings.previewOpen }));
       if (typing) return;
 
       const grid = ex.view.mode === "grid";
       const cols = grid ? ui.gridColumns : 1;
+      const previewOpen = settings.previewOpen && settings.enabled("preview");
+      const fromPreview = previewOpen && ui.previewActive;
+
+      if (fromPreview) {
+        // Every arrow steps through files; the paging keys scroll whatever is being previewed.
+        if (key === "ArrowLeft" || key === "ArrowUp") return handled(() => ex.moveFocus(-1, e.shiftKey));
+        if (key === "ArrowRight" || key === "ArrowDown") return handled(() => ex.moveFocus(1, e.shiftKey));
+        if (key === "PageUp" || key === "PageDown" || key === "Home" || key === "End") {
+          return handled(() => {
+            const el = document.querySelector(".preview-pane .preview-scroll, .preview-pane .cm-scroller");
+            if (key === "Home") el?.scrollTo({ top: 0 });
+            else if (key === "End") el?.scrollTo({ top: el.scrollHeight });
+            else el?.scrollBy({ top: (key === "PageUp" ? -0.9 : 0.9) * el.clientHeight });
+          });
+        }
+        // Keyboard users tabbing to a preview button should be able to press it.
+        const onButton = (e.target as HTMLElement).tagName === "BUTTON";
+        if (onButton && (key === "Enter" || key === " ")) return;
+      }
+
+      if (key === " " && previewOpen && !typeAhead) {
+        const media = document.querySelector<HTMLMediaElement>(".preview-pane video, .preview-pane audio");
+        if (media) return handled(() => (media.paused ? media.play().catch(() => {}) : media.pause()));
+      }
 
       switch (true) {
         case key === "Backspace":
           return handled(ex.back);
+        case previewOpen && !grid && key === "ArrowRight":
+          return handled(() => ex.moveFocus(1, e.shiftKey));
+        case previewOpen && !grid && key === "ArrowLeft":
+          return handled(() => ex.moveFocus(-1, e.shiftKey));
         case key === "ArrowDown":
           return handled(() => ex.moveFocus(cols, e.shiftKey));
         case key === "ArrowUp":
@@ -88,6 +118,8 @@ export function useShortcuts() {
         case ctrl && e.shiftKey && key.toLowerCase() === "c":
           return handled(() => navigator.clipboard.writeText(ex.selectedEntries().map((x) => x.path).join("\n")));
         case ctrl && key.toLowerCase() === "c":
+          // Text highlighted on screen (e.g. in a code preview) wins over copying the file.
+          if (window.getSelection()?.toString()) return;
           return handled(() => ex.copySelected("copy"));
         case ctrl && key.toLowerCase() === "x":
           return handled(() => ex.copySelected("cut"));
