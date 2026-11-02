@@ -60,15 +60,19 @@ fn decode(bytes: &[u8], truncated: bool) -> TextPreview {
     match std::str::from_utf8(body) {
         Ok(s) => done(s.to_owned(), encoding),
         // The read limit can split a multi-byte character; that isn't an encoding problem.
-        Err(e) if truncated && e.error_len().is_none() => {
-            done(String::from_utf8_lossy(&body[..e.valid_up_to()]).into_owned(), encoding)
-        }
+        Err(e) if truncated && e.error_len().is_none() => done(
+            String::from_utf8_lossy(&body[..e.valid_up_to()]).into_owned(),
+            encoding,
+        ),
         Err(_) => done(windows_1252(body), "Windows-1252"),
     }
 }
 
 fn utf16(bytes: &[u8], to_unit: fn([u8; 2]) -> u16) -> String {
-    let units: Vec<u16> = bytes.chunks_exact(2).map(|c| to_unit([c[0], c[1]])).collect();
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|c| to_unit([c[0], c[1]]))
+        .collect();
     String::from_utf16_lossy(&units)
 }
 
@@ -166,14 +170,16 @@ unsafe fn bitmap_to_png(bitmap: windows::Win32::Graphics::Gdi::HBITMAP) -> Resul
     }
     let (width, height) = (info.bmWidth, info.bmHeight.abs());
 
-    let mut header = BITMAPINFO::default();
-    header.bmiHeader = BITMAPINFOHEADER {
-        biSize: size_of::<BITMAPINFOHEADER>() as u32,
-        biWidth: width,
-        biHeight: -height, // negative = top-down rows
-        biPlanes: 1,
-        biBitCount: 32,
-        biCompression: BI_RGB.0,
+    let mut header = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height, // negative = top-down rows
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut pixels = vec![0u8; width as usize * height as usize * 4];
@@ -252,7 +258,10 @@ mod tests {
         assert_eq!((be.text.as_str(), be.encoding), ("hi", "UTF-16 BE"));
 
         let legacy = decode(b"caf\xE9 \x80", false);
-        assert_eq!((legacy.text.as_str(), legacy.encoding), ("caf\u{e9} \u{20ac}", "Windows-1252"));
+        assert_eq!(
+            (legacy.text.as_str(), legacy.encoding),
+            ("caf\u{e9} \u{20ac}", "Windows-1252")
+        );
     }
 
     #[test]
@@ -281,7 +290,10 @@ mod tests {
         let cut = read_text(p, 4).unwrap();
         assert_eq!((cut.text.as_str(), cut.truncated), ("0123", true));
         let exact = read_text(p, 10).unwrap();
-        assert_eq!((exact.text.as_str(), exact.truncated), ("0123456789", false));
+        assert_eq!(
+            (exact.text.as_str(), exact.truncated),
+            ("0123456789", false)
+        );
 
         std::fs::remove_file(&path).unwrap();
         assert!(read_text(p, 4).is_err());
