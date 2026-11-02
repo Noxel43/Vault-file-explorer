@@ -1,5 +1,6 @@
 ﻿mod db;
 mod fs_ops;
+mod preview;
 mod watcher;
 
 use std::collections::HashMap;
@@ -7,6 +8,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
 use serde::Serialize;
+use tauri::ipc::Response;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -162,6 +164,19 @@ fn unwatch_dir(watcher: State<watcher::DirWatcher>) {
     watcher.stop();
 }
 
+// ---------------------------------------------------------------- preview
+
+#[tauri::command]
+async fn read_text_preview(path: String, max_bytes: usize) -> CmdResult<preview::TextPreview> {
+    blocking(move || preview::read_text(&path, max_bytes)).await?
+}
+
+#[tauri::command]
+async fn file_thumbnail(path: String, size: i32) -> CmdResult<Response> {
+    let png = blocking(move || preview::thumbnail(&path, size)).await??;
+    Ok(Response::new(png))
+}
+
 // ---------------------------------------------------------------- metadata
 
 #[tauri::command]
@@ -283,6 +298,8 @@ pub fn run() {
             transfer_paths,
             watch_dir,
             unwatch_dir,
+            read_text_preview,
+            file_thumbnail,
             get_meta,
             set_meta,
             get_folder_meta,

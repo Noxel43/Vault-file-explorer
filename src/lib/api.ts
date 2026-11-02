@@ -9,6 +9,7 @@ import type {
   RawEntry,
   Tag,
   TagWithCount,
+  TextPreview,
   TransferResult,
 } from "./types";
 
@@ -32,6 +33,10 @@ export const api = {
     invoke<TransferResult>("transfer_paths", { paths, destDir, mode }),
   watchDir: (path: string) => invoke<void>("watch_dir", { path }),
   unwatchDir: () => invoke<void>("unwatch_dir"),
+
+  readTextPreview: (path: string, maxBytes: number) =>
+    invoke<TextPreview>("read_text_preview", { path, maxBytes }),
+  fileThumbnail: (path: string, size: number) => invoke<ArrayBuffer>("file_thumbnail", { path, size }),
 
   getMeta: (path: string) => invoke<FileMeta>("get_meta", { path }),
   setMeta: (path: string, description: string, keywords: string[], rating: number) =>

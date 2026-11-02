@@ -89,6 +89,13 @@ export interface TransferResult {
   errors: string[];
 }
 
+export interface TextPreview {
+  text: string;
+  encoding: string;
+  truncated: boolean;
+  binary: boolean;
+}
+
 export interface AppInfo {
   version: string;
   tier: "lite" | "standard" | "full";
