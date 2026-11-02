@@ -278,8 +278,8 @@ select { height: 28px; padding: 0 6px; min-width: 150px; }
 /* ------------------------------------------------------------ search */
 
 .search-header { display: flex; align-items: center; gap: 10px; padding: 6px 12px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--surface); font-size: var(--fs-sm); color: var(--text-dim); min-height: 37px; flex-wrap: wrap; }
-.search-header .seg-small { margin: 0; }
-.search-header .seg-small button { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.search-header .seg-small { margin: 0; flex-shrink: 0; }
+.search-header .seg-small button { flex: none; max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .search-count { font-variant-numeric: tabular-nums; }
 .search-count b { color: var(--text); font-weight: 600; }
 .index-note { display: inline-flex; align-items: center; gap: 5px; }

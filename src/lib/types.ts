@@ -110,6 +110,7 @@ export interface IndexStatus {
   state: "off" | "loading" | "scanning" | "idle";
   files: number;
   dirs: number;
+  revision: number;
   foldersWalked: number;
   skipped: number;
   lastScan: number;

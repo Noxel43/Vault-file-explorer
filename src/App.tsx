@@ -129,22 +129,31 @@ function useIndexer() {
   }, [enabled, loaded, roots, excludes]);
 
   useEffect(() => {
-    // While indexing, an open search keeps picking up what's found, at a pace it can be read at.
+    // An open search keeps up with what the index finds, at a pace it can be read at.
     let lastRun = 0;
     let wasReady = false;
+    let lastRevision = -1;
+    let timer: number | undefined;
+    const rerun = (revision: number) => {
+      window.clearTimeout(timer);
+      timer = undefined;
+      lastRun = Date.now();
+      lastRevision = revision;
+      useExplorer.getState().rerunSearch();
+    };
     const unlisten = listen<IndexStatus>("index-status", ({ payload }) => {
-      const ex = useExplorer.getState();
-      ex.setIndexStatus(payload);
+      useExplorer.getState().setIndexStatus(payload);
       const ready = payload.state !== "loading" && payload.state !== "off";
       const justReady = ready && !wasReady;
       wasReady = ready;
-      const now = Date.now();
-      if (justReady || (payload.state === "scanning" && now - lastRun > 2000)) {
-        lastRun = now;
-        ex.rerunSearch();
-      }
+      if (justReady) return rerun(payload.revision);
+      if (payload.revision === lastRevision) return;
+      // Always catches up afterwards: there may be no further change to trigger it.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => rerun(payload.revision), Math.max(0, lastRun + 2000 - Date.now()));
     });
     return () => {
+      window.clearTimeout(timer);
       unlisten.then((f) => f());
     };
   }, []);

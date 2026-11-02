@@ -131,6 +131,8 @@ pub struct Table {
     live_dirs: usize,
     live: usize,
     dead: usize,
+    /// Goes up with every change, so open results know when to ask again.
+    revision: u64,
 }
 
 fn seconds(ms: u64) -> u32 {
@@ -153,6 +155,10 @@ impl Table {
         self.created.reserve(rows);
         self.flags.reserve(rows);
         self.category.reserve(rows);
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     pub fn live_rows(&self) -> usize {
@@ -222,6 +228,7 @@ impl Table {
         self.category
             .push(category_of(row.lower_name, row.flags & F_DIR != 0));
         self.live += 1;
+        self.revision += 1;
     }
 
     fn row_of(&self, id: u32) -> Option<usize> {
@@ -242,6 +249,7 @@ impl Table {
             self.category[row] = category_of(name, flags & F_DIR != 0);
         }
         self.flags[row] = flags;
+        self.revision += 1;
     }
 
     pub fn remove(&mut self, id: u32) {
@@ -251,6 +259,7 @@ impl Table {
             self.flags[row] |= F_DEAD;
             self.live -= 1;
             self.dead += 1;
+            self.revision += 1;
         }
     }
 

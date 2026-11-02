@@ -133,6 +133,8 @@ pub struct IndexStatus {
     pub state: &'static str,
     pub files: usize,
     pub dirs: usize,
+    /// Changes whenever the indexed rows do, however the count comes out.
+    pub revision: u64,
     pub folders_walked: u64,
     /// Folders Windows wouldn't let the walk read.
     pub skipped: u64,
@@ -662,6 +664,7 @@ impl Inner {
             state,
             files: table.live_rows(),
             dirs: table.live_dirs(),
+            revision: table.revision(),
             folders_walked: self.folders_walked.load(Ordering::Relaxed),
             skipped: self.skipped.load(Ordering::Relaxed),
             last_scan: self.last_scan.load(Ordering::Relaxed),

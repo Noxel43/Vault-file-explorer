@@ -2,6 +2,7 @@ import { LoaderCircle } from "lucide-react";
 import { numberFmt } from "../lib/format";
 import { baseName } from "../lib/path";
 import { useExplorer } from "../store/explorer";
+import { useModule } from "../store/settings";
 
 /** The strip above search results: where it's looking, how much it found, in what order. */
 export function SearchHeader() {
@@ -13,6 +14,11 @@ export function SearchHeader() {
   const sortKey = useExplorer((s) => s.view.sortKey);
   const setView = useExplorer((s) => s.setView);
   const status = useExplorer((s) => s.indexStatus);
+  const statusBarOn = useModule("statusbar");
+  // The status bar already says this when it's there.
+  const showIndexing = status?.state === "scanning" && !statusBarOn;
+
+  if (!origin && !search?.ready && !showIndexing && sortKey === "relevance") return null;
 
   return (
     <div className="search-header">
@@ -32,7 +38,7 @@ export function SearchHeader() {
           {search.total > shown && ` · best ${numberFmt.format(shown)} shown`} · {search.tookMs} ms
         </span>
       )}
-      {status?.state === "scanning" && (
+      {showIndexing && (
         <span className="index-note faint">
           <LoaderCircle size={11} className="spin" /> Still indexing
         </span>
