@@ -55,6 +55,22 @@
   --ft-model3d: #4fd1c5;
   --ft-other: #7f8494;
 
+  /* syntax highlighting */
+  --syn-keyword: #c792ea;
+  --syn-string: #a5d65c;
+  --syn-comment: #6c707c;
+  --syn-number: #ffab5e;
+  --syn-function: #82aaff;
+  --syn-type: #4fd1c5;
+  --syn-tag: #f06fc0;
+  --syn-property: #6ea8ff;
+  --syn-meta: #a3a6b1;
+
+  /* preview */
+  --paper: #ffffff;
+  --checker-a: #1d1f24;
+  --checker-b: #25272e;
+
   /* type */
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
@@ -115,6 +131,17 @@
   --active: rgba(236, 239, 244, 0.09);
   --scrollbar: #434c5e;
   --scrollbar-hover: #4c566a;
+  --syn-keyword: #81a1c1;
+  --syn-string: #a3be8c;
+  --syn-comment: #7a859b;
+  --syn-number: #b48ead;
+  --syn-function: #88c0d0;
+  --syn-type: #8fbcbb;
+  --syn-tag: #d08770;
+  --syn-property: #d8dee9;
+  --syn-meta: #8590a6;
+  --checker-a: #353c4a;
+  --checker-b: #3e4555;
 }
 
 [data-theme="light"] {
@@ -137,6 +164,17 @@
   --shadow: 0 8px 28px rgba(20, 22, 28, 0.14), 0 1px 3px rgba(20, 22, 28, 0.1);
   --scrollbar: #d3d6dd;
   --scrollbar-hover: #bfc3cc;
+  --syn-keyword: #8b3fd1;
+  --syn-string: #2e7d32;
+  --syn-comment: #8a8f9b;
+  --syn-number: #c2570c;
+  --syn-function: #2f5fd0;
+  --syn-type: #0f8a80;
+  --syn-tag: #c2267f;
+  --syn-property: #2563c9;
+  --syn-meta: #555a66;
+  --checker-a: #ffffff;
+  --checker-b: #e7e9ee;
   color-scheme: light;
 }
 
