@@ -8,6 +8,7 @@
   FilePlus,
   FolderOpen,
   FolderPlus,
+  FolderSearch,
   Info,
   Link,
   Pencil,
@@ -19,7 +20,7 @@
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { isVirtual } from "../lib/path";
+import { SEARCH, isVirtual, parentOf } from "../lib/path";
 import type { SortKey, ViewMode } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule, useSettings } from "../store/settings";
@@ -106,6 +107,12 @@ const SORT_ITEMS: { key: SortKey; label: string }[] = [
   { key: "type", label: "Type" },
 ];
 
+const SEARCH_SORT_ITEMS: { key: SortKey; label: string }[] = [
+  { key: "relevance", label: "Best match" },
+  { key: "folder", label: "Folder" },
+  ...SORT_ITEMS,
+];
+
 export function ContextMenu() {
   const menu = useUi((s) => s.contextMenu);
   const close = useUi((s) => s.closeContextMenu);
@@ -128,6 +135,18 @@ export function ContextMenu() {
         shortcut: "Enter",
         onClick: () => sel.forEach((e, i) => (e.isDir ? i === 0 && s.open(e) : s.open(e))),
       },
+      ...(single && virtual
+        ? [
+            {
+              label: "Open file location",
+              icon: <FolderSearch size={14} />,
+              onClick: () => {
+                const parent = parentOf(single.path);
+                if (parent) s.navigate(parent, { select: single.path });
+              },
+            },
+          ]
+        : []),
       ...(previewOn
         ? [{ label: "Preview", icon: <Eye size={14} />, shortcut: "Alt+P", onClick: () => update({ previewOpen: true }) }]
         : []),
@@ -176,7 +195,7 @@ export function ContextMenu() {
         label: "Sort by",
         icon: <ChevronRight size={14} style={{ opacity: 0 }} />,
         children: [
-          ...SORT_ITEMS.map((it) => ({
+          ...(s.location === SEARCH ? SEARCH_SORT_ITEMS : SORT_ITEMS).map((it) => ({
             label: it.label,
             checked: s.view.sortKey === it.key,
             onClick: () => s.setView({ sortKey: it.key }),

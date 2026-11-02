@@ -1,16 +1,18 @@
-import { Check, Info, Palette, Puzzle, Settings2, Tag, Trash, X } from "lucide-react";
-import { useState } from "react";
+import { Check, Info, Palette, Plus, Puzzle, Search, Settings2, Tag, Trash, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { ViewMode } from "../lib/types";
+import { formatDateFull, formatSize, numberFmt } from "../lib/format";
+import type { Drive, ViewMode } from "../lib/types";
 import { MODULES, PRESETS, TIER_ORDER, isInstalled, presetState, type ModuleId } from "../modules/registry";
 import { useExplorer } from "../store/explorer";
-import { THEMES, useSettings, type ThemeId } from "../store/settings";
+import { DEFAULT_INDEX_EXCLUDES, THEMES, useModule, useSettings, type ThemeId } from "../store/settings";
 import { useUi, type SettingsTab } from "../store/ui";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings2 size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
   { id: "modules", label: "Modules", icon: <Puzzle size={15} /> },
+  { id: "search", label: "Search", icon: <Search size={15} /> },
   { id: "tags", label: "Tags", icon: <Tag size={15} /> },
   { id: "about", label: "About", icon: <Info size={15} /> },
 ];
@@ -188,6 +190,130 @@ function Modules() {
   );
 }
 
+function PathList({ items, onRemove }: { items: string[]; onRemove: (item: string) => void }) {
+  return (
+    <div className="path-list">
+      {items.map((item) => (
+        <div key={item} className="path-list-row">
+          <span className="selectable grow">{item}</span>
+          <button className="icon-btn small" title="Remove" onClick={() => onRemove(item)}>
+            <X size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AddPath({ placeholder, onAdd }: { placeholder: string; onAdd: (value: string) => Promise<string | null> }) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const add = async () => {
+    if (!draft.trim()) return;
+    const problem = await onAdd(draft.trim());
+    setError(problem);
+    if (!problem) setDraft("");
+  };
+  return (
+    <>
+      <div className="path-add">
+        <input
+          className="text-input grow"
+          value={draft}
+          placeholder={placeholder}
+          spellCheck={false}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <button className="btn small" onClick={add}>
+          <Plus size={13} /> Add
+        </button>
+      </div>
+      {error && <div className="setting-hint path-error">{error}</div>}
+    </>
+  );
+}
+
+function SearchSettings() {
+  const s = useSettings();
+  const enabled = useModule("search");
+  const status = useExplorer((x) => x.indexStatus);
+  const [drives, setDrives] = useState<Drive[]>([]);
+  useEffect(() => {
+    api.getDrives().then(setDrives).catch(console.error);
+  }, []);
+
+  if (!enabled) {
+    return <p className="setting-hint block">Turn on the Indexed search module to search across your drives.</p>;
+  }
+
+  const fixed = drives.filter((d) => d.kind === "fixed").map((d) => d.path);
+  const roots = s.indexRoots ?? fixed;
+  const custom = roots.filter((r) => !drives.some((d) => d.path === r));
+  const setRoots = (next: string[]) => s.update({ indexRoots: next });
+  const scanning = status?.state === "scanning" || status?.state === "loading";
+
+  return (
+    <>
+      <h4>Index</h4>
+      <Row label={scanning ? "Indexing in the background…" : "Up to date"} hint={status?.lastScan ? `Last full scan ${formatDateFull(status.lastScan)}` : undefined}>
+        <button className="btn ghost small" onClick={() => api.indexRebuild().catch(console.error)}>
+          Rebuild
+        </button>
+      </Row>
+      <Row label="Items indexed">
+        {numberFmt.format(status?.files ?? 0)}
+      </Row>
+      <Row label="Space used" hint="The index on disk, and the memory that makes searching instant.">
+        {formatSize(status?.diskBytes ?? 0)} on disk · {formatSize(status?.memoryBytes ?? 0)} in memory
+      </Row>
+      {!!status?.skipped && (
+        <p className="setting-hint block">{numberFmt.format(status.skipped)} folders were skipped because Windows wouldn't allow reading them.</p>
+      )}
+
+      <h4>Locations</h4>
+      {drives.map((d) => (
+        <Row key={d.path} label={`${d.label} (${d.path.replace(/\\$/, "")})`} hint={d.kind === "fixed" ? undefined : `${d.kind} drive`}>
+          <Toggle
+            checked={roots.includes(d.path)}
+            onChange={(on) => setRoots(on ? [...roots, d.path] : roots.filter((r) => r !== d.path))}
+          />
+        </Row>
+      ))}
+      <PathList items={custom} onRemove={(item) => setRoots(roots.filter((r) => r !== item))} />
+      <AddPath
+        placeholder="Add a folder, e.g. \\server\share"
+        onAdd={async (value) => {
+          try {
+            const path = await api.resolvePath(value);
+            if (!roots.includes(path)) setRoots([...roots, path]);
+            return null;
+          } catch (e) {
+            return String(e);
+          }
+        }}
+      />
+
+      <h4>Excluded</h4>
+      <p className="setting-hint block">A plain name skips that folder wherever it appears. A path skips one place.</p>
+      <PathList items={s.indexExcludes} onRemove={(item) => s.update({ indexExcludes: s.indexExcludes.filter((e) => e !== item) })} />
+      <AddPath
+        placeholder="node_modules or C:\Some\Folder"
+        onAdd={async (value) => {
+          if (!s.indexExcludes.includes(value)) s.update({ indexExcludes: [...s.indexExcludes, value] });
+          return null;
+        }}
+      />
+      <button className="btn ghost small path-reset" onClick={() => s.update({ indexExcludes: DEFAULT_INDEX_EXCLUDES })}>
+        Reset to defaults
+      </button>
+    </>
+  );
+}
+
 function Tags() {
   const tags = useExplorer((s) => s.tags);
   const refreshTags = useExplorer((s) => s.refreshTags);
@@ -299,6 +425,7 @@ export function SettingsDialog() {
           {tab === "general" && <General />}
           {tab === "appearance" && <Appearance />}
           {tab === "modules" && <Modules />}
+          {tab === "search" && <SearchSettings />}
           {tab === "tags" && <Tags />}
           {tab === "about" && <About />}
         </div>

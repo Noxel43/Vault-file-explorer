@@ -14,7 +14,7 @@ export interface ConfirmState {
   onConfirm: () => void;
 }
 
-export type SettingsTab = "general" | "appearance" | "modules" | "tags" | "about";
+export type SettingsTab = "general" | "appearance" | "modules" | "search" | "tags" | "about";
 
 interface UiStore {
   contextMenu: ContextMenuState | null;

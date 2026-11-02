@@ -18,8 +18,18 @@ export const DEFAULT_VIEW: FolderView = {
   foldersFirst: true,
   showHidden: false,
   iconSize: 96,
-  columns: { name: 260, modified: 160, type: 100, size: 84, tags: 140 },
+  columns: { name: 260, location: 300, modified: 160, type: 100, size: 84, tags: 140 },
 };
+
+/** Names apply anywhere; anything with a path separator or %VAR% is one specific place. */
+export const DEFAULT_INDEX_EXCLUDES = [
+  "$Recycle.Bin",
+  "System Volume Information",
+  "node_modules",
+  ".git",
+  "%WINDIR%\\WinSxS",
+  "%TEMP%",
+];
 
 export interface AppSettings {
   theme: ThemeId;
@@ -39,6 +49,9 @@ export interface AppSettings {
   previewOpen: boolean;
   previewWidth: number;
   previewWrap: boolean;
+  /** Folders to index. null means every fixed drive, including ones added later. */
+  indexRoots: string[] | null;
+  indexExcludes: string[];
 }
 
 const DEFAULTS: AppSettings = {
@@ -58,6 +71,8 @@ const DEFAULTS: AppSettings = {
   previewOpen: false,
   previewWidth: 380,
   previewWrap: false,
+  indexRoots: null,
+  indexExcludes: DEFAULT_INDEX_EXCLUDES,
 };
 
 interface SettingsStore extends AppSettings {

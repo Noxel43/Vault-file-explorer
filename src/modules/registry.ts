@@ -36,7 +36,7 @@ export const MODULES: ModuleDef[] = [
   { id: "tags", name: "Tag library", description: "Tags in the sidebar, with a view of every file carrying a tag.", tier: "standard" },
   { id: "thumbnails", name: "Image thumbnails", description: "Show image previews in grid view.", tier: "standard" },
   { id: "preview", name: "Preview pane", description: "Inline previews for images, video, audio, PDF, code, fonts and 3D files.", tier: "standard" },
-  { id: "search", name: "Indexed search", description: "Background indexing and instant search across drives.", tier: "standard", planned: true },
+  { id: "search", name: "Indexed search", description: "Background indexing and instant search across drives.", tier: "standard" },
   { id: "batchRename", name: "Batch rename", description: "Rename many files with patterns and regex, with a live preview.", tier: "standard", planned: true },
   { id: "archives", name: "Archive tools", description: "Create, browse and selectively extract zip, 7z and rar.", tier: "full", planned: true },
   { id: "encryption", name: "Encryption", description: "Encrypt files and folders into .vault containers.", tier: "full", planned: true },
@@ -68,7 +68,7 @@ export const PRESETS: Preset[] = [
     id: "balanced",
     name: "Balanced",
     description: "Everyday browsing with metadata, previews and a status bar.",
-    modules: ["filters", "metadata", "watcher", "statusbar", "tags", "preview"],
+    modules: ["filters", "metadata", "watcher", "statusbar", "tags", "preview", "search"],
   },
   {
     id: "everything",

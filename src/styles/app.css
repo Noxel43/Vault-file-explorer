@@ -112,6 +112,10 @@ select { height: 28px; padding: 0 6px; min-width: 150px; }
 .searchbox-icon { position: absolute; left: 10px; top: 8px; color: var(--text-faint); pointer-events: none; }
 .searchbox-clear { position: absolute; right: 6px; top: 7px; color: var(--text-faint); border-radius: 3px; display: grid; place-items: center; width: 16px; height: 16px; }
 .searchbox-clear:hover { color: var(--text); background: var(--hover); }
+.searchbox:has(.searchbox-global) input { padding-right: 46px; }
+.searchbox:has(.searchbox-global) .searchbox-clear { right: 26px; }
+.searchbox-global { position: absolute; right: 6px; top: 7px; color: var(--text-faint); border-radius: 3px; display: grid; place-items: center; width: 16px; height: 16px; }
+.searchbox-global:hover { color: var(--accent); background: var(--hover); }
 
 .segmented { display: flex; background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; margin: 0 4px; }
 .segmented button { width: 28px; height: 24px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--text-dim); }
@@ -270,6 +274,21 @@ select { height: 28px; padding: 0 6px; min-width: 150px; }
 .empty-icon.danger { color: var(--danger); }
 .empty-title { font-size: var(--fs-lg); color: var(--text); font-weight: 500; }
 .empty-text { max-width: 420px; font-size: var(--fs-sm); margin-bottom: 6px; }
+
+/* ------------------------------------------------------------ search */
+
+.search-header { display: flex; align-items: center; gap: 10px; padding: 6px 12px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--surface); font-size: var(--fs-sm); color: var(--text-dim); min-height: 37px; flex-wrap: wrap; }
+.search-header .seg-small { margin: 0; }
+.search-header .seg-small button { max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.search-count { font-variant-numeric: tabular-nums; }
+.search-count b { color: var(--text); font-weight: 600; }
+.index-note { display: inline-flex; align-items: center; gap: 5px; }
+
+.path-list { display: flex; flex-direction: column; padding: 4px 0; }
+.path-list-row { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: var(--fs-sm); color: var(--text-dim); }
+.path-add { display: flex; gap: 8px; margin-top: 8px; }
+.path-error { color: var(--danger); margin-top: 4px; }
+.path-reset { margin-top: 10px; }
 
 /* ------------------------------------------------------------ this pc */
 

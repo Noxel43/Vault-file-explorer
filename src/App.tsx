@@ -6,16 +6,18 @@ import { FilterBar } from "./components/FilterBar";
 import { MetaPanel } from "./components/MetaPanel";
 import { ConfirmDialog, Toasts } from "./components/Overlays";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { SearchHeader } from "./components/SearchHeader";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { PreviewPane } from "./components/preview/PreviewPane";
 import { ThisPc } from "./components/ThisPc";
 import { Toolbar } from "./components/Toolbar";
 import { useShortcuts } from "./hooks/useShortcuts";
-import { THIS_PC, pathKey } from "./lib/path";
+import { SEARCH, THIS_PC, pathKey } from "./lib/path";
 import { useExplorer } from "./store/explorer";
 import { useModule, useSettings } from "./store/settings";
 import { api } from "./lib/api";
+import type { IndexStatus } from "./lib/types";
 import "./styles/tokens.css";
 import "./styles/app.css";
 
@@ -103,6 +105,51 @@ function useLiveUpdates() {
   }, [enabled]);
 }
 
+/** Keeps the background index running while the search module is on. */
+function useIndexer() {
+  const enabled = useModule("search");
+  const loaded = useSettings((s) => s.loaded);
+  const roots = useSettings((s) => s.indexRoots);
+  const excludes = useSettings((s) => s.indexExcludes);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const ex = useExplorer.getState();
+    if (!enabled) {
+      api.indexStop().catch(console.error);
+      ex.setIndexStatus(null);
+      if (ex.location === SEARCH) ex.navigate(THIS_PC);
+      return;
+    }
+    (async () => {
+      const fixed = roots ?? (await api.getDrives()).filter((d) => d.kind === "fixed").map((d) => d.path);
+      await api.indexStart(fixed, excludes);
+      ex.setIndexStatus(await api.indexStatus());
+    })().catch(console.error);
+  }, [enabled, loaded, roots, excludes]);
+
+  useEffect(() => {
+    // While indexing, an open search keeps picking up what's found, at a pace it can be read at.
+    let lastRun = 0;
+    let wasReady = false;
+    const unlisten = listen<IndexStatus>("index-status", ({ payload }) => {
+      const ex = useExplorer.getState();
+      ex.setIndexStatus(payload);
+      const ready = payload.state !== "loading" && payload.state !== "off";
+      const justReady = ready && !wasReady;
+      wasReady = ready;
+      const now = Date.now();
+      if (justReady || (payload.state === "scanning" && now - lastRun > 2000)) {
+        lastRun = now;
+        ex.rerunSearch();
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+}
+
 export default function App() {
   const loaded = useSettings((s) => s.loaded);
   const sidebarOpen = useSettings((s) => s.sidebarOpen);
@@ -122,6 +169,7 @@ export default function App() {
 
   useAppearance();
   useLiveUpdates();
+  useIndexer();
   useShortcuts();
 
   useEffect(() => {
@@ -155,6 +203,7 @@ export default function App() {
           </>
         )}
         <main className="main">
+          {location === SEARCH && <SearchHeader />}
           {filtersOn && filterBarOpen && !onThisPc && <FilterBar />}
           {onThisPc ? <ThisPc /> : <FileView />}
         </main>

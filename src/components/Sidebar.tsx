@@ -1,10 +1,11 @@
-import { Disc3, Download, FileMusic, FilePlay, FileText, HardDrive, House, Image, Monitor, Network, Tag, Usb } from "lucide-react";
+import { Disc3, Download, FileMusic, FilePlay, FileText, HardDrive, House, Image, Monitor, Network, Search, Tag, Usb } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { formatSize } from "../lib/format";
-import { THIS_PC, pathKey, tagLocation } from "../lib/path";
+import { SEARCH, THIS_PC, pathKey, tagLocation } from "../lib/path";
 import type { Drive } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule } from "../store/settings";
+import { useUi } from "../store/ui";
 
 export const PLACE_ICONS: Record<string, LucideIcon> = {
   home: House,
@@ -44,6 +45,9 @@ export function Sidebar({ width }: { width: number }) {
   const tags = useExplorer((s) => s.tags);
   const navigate = useExplorer((s) => s.navigate);
   const tagsOn = useModule("tags");
+  const searchOn = useModule("search");
+  const openSearch = useExplorer((s) => s.openSearch);
+  const focusSearch = useUi((s) => s.focusSearch);
   const here = pathKey(location);
 
   return (
@@ -53,6 +57,19 @@ export function Sidebar({ width }: { width: number }) {
           <Monitor size={16} className="side-icon" />
           <span className="side-label">This PC</span>
         </button>
+        {searchOn && (
+          <button
+            className={`side-item${location === SEARCH ? " active" : ""}`}
+            title="Search everything (Ctrl+K)"
+            onClick={() => {
+              openSearch();
+              focusSearch();
+            }}
+          >
+            <Search size={16} className="side-icon" />
+            <span className="side-label">Search</span>
+          </button>
+        )}
       </div>
 
       <div className="side-section">

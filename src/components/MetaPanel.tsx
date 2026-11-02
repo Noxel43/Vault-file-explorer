@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { CATEGORY_LABELS, typeLabel } from "../lib/fileTypes";
 import { formatDateFull, formatSize, numberFmt } from "../lib/format";
-import { THIS_PC, baseName, isVirtual, pathKey } from "../lib/path";
+import { SEARCH, THIS_PC, baseName, isVirtual, pathKey } from "../lib/path";
 import type { Entry, FileMeta, Tag } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule } from "../store/settings";
@@ -475,7 +475,11 @@ export function MetaPanel({ width }: { width: number }) {
   else
     body = (
       <div className="panel-placeholder">
-        {location === THIS_PC ? "Select a drive or folder to get started." : `${numberFmt.format(total)} tagged items`}
+        {location === THIS_PC
+          ? "Select a drive or folder to get started."
+          : location === SEARCH
+            ? "Select a result to see its details."
+            : `${numberFmt.format(total)} tagged items`}
       </div>
     );
 

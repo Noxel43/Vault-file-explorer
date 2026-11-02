@@ -78,7 +78,7 @@ export function compilePattern(pattern: string, mode: PatternMode): ((name: stri
     (include.length === 0 || include.some((r) => r.test(name))) && !exclude.some((r) => r.test(name));
 }
 
-function dateRange(f: Filters): [number, number] | null {
+export function dateRange(f: Filters): [number, number] | null {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const DAY = 86_400_000;

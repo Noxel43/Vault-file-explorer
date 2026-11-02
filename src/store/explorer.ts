@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { categoryOf, extOf } from "../lib/fileTypes";
-import { EMPTY_FILTERS, applyFilters, sortEntries, type Filters } from "../lib/filters";
-import { THIS_PC, baseName, isVirtual, join, parentOf, pathKey, tagIdOf } from "../lib/path";
-import { unpack, type Drive, type Entry, type FolderView, type MetaSummary, type Place, type RawEntry, type TagWithCount } from "../lib/types";
+import { EMPTY_FILTERS, activeFilterCount, applyFilters, dateRange, sortEntries, type Filters } from "../lib/filters";
+import { SEARCH, THIS_PC, baseName, isVirtual, join, parentOf, pathKey, tagIdOf } from "../lib/path";
+import { unpack, type Drive, type Entry, type FolderView, type IndexStatus, type MetaSummary, type Place, type RawEntry, type SearchResults, type TagWithCount } from "../lib/types";
 import { DEFAULT_VIEW, useSettings } from "./settings";
 
 export interface Toast {
@@ -11,6 +11,9 @@ export interface Toast {
   text: string;
   kind: "info" | "error";
 }
+
+/** The last search's numbers, as opposed to its rows (which are `entries`). */
+export type SearchInfo = Pick<SearchResults, "total" | "categories" | "ready" | "tookMs">;
 
 interface Clipboard {
   paths: string[];
@@ -44,6 +47,17 @@ interface ExplorerStore {
   tags: TagWithCount[];
   toasts: Toast[];
 
+  /** null until a search has answered; also while there's nothing to search for. */
+  search: SearchInfo | null;
+  searching: boolean;
+  /** Folder a search is limited to, or null for everything indexed. */
+  searchScope: string | null;
+  /** The folder search was opened from, offered as a scope. */
+  searchOrigin: string | null;
+  /** What to show when returning to search, since filters reset on leaving it. */
+  lastSearchFilters: Filters;
+  indexStatus: IndexStatus | null;
+
   init: () => Promise<void>;
   navigate: (path: string, opts?: { push?: boolean; select?: string }) => Promise<void>;
   back: () => void;
@@ -51,6 +65,12 @@ interface ExplorerStore {
   up: () => void;
   refresh: () => Promise<void>;
   goToInput: (input: string) => Promise<boolean>;
+
+  openSearch: (query?: string) => void;
+  setSearchScope: (scope: string | null) => void;
+  /** Runs the current search again, for when the index has changed underneath it. */
+  rerunSearch: () => void;
+  setIndexStatus: (status: IndexStatus | null) => void;
 
   setView: (patch: Partial<FolderView>) => void;
   resetView: () => void;
@@ -97,6 +117,10 @@ function normaliseView(v: Partial<FolderView> | null | undefined): FolderView {
   return { ...base, ...v, columns: { ...base.columns, ...v?.columns } };
 }
 
+/** Results are ranked until the user asks for another order. */
+const searchView = (v: Partial<FolderView> | null) =>
+  normaliseView({ sortKey: "relevance", sortDir: "asc", foldersFirst: false, ...v });
+
 let loadToken = 0;
 let viewSaveTimer: number | undefined;
 let toastId = 0;
@@ -112,9 +136,70 @@ function sortedFor(entries: Entry[], view: FolderView): Entry[] {
   return sortCache.sorted;
 }
 
+let searchToken = 0;
+let lastSearchKey = "";
+
 export const useExplorer = create<ExplorerStore>((set, get) => {
+  /** Filtering and sorting happen in the index, so this asks it again. Instant enough to run per keystroke. */
+  const runSearch = async () => {
+    const { filters: f, view, searchScope } = get();
+    const range = dateRange(f);
+    const params = {
+      query: f.query,
+      pattern: f.pattern,
+      patternMode: f.patternMode,
+      types: f.types,
+      dateField: f.dateField,
+      dateFrom: range && range[0] > 0 ? range[0] : null,
+      dateTo: range && Number.isFinite(range[1]) ? range[1] : null,
+      sizeMin: f.sizeMin,
+      sizeMax: f.sizeMax,
+      showHidden: view.showHidden,
+      scope: searchScope,
+      sortKey: view.sortKey,
+      sortDir: view.sortDir,
+      foldersFirst: view.foldersFirst,
+    };
+    const key = JSON.stringify([params, f.tagIds, f.tagMode]);
+    if (key === lastSearchKey) return;
+    lastSearchKey = key;
+    const token = ++searchToken;
+
+    if (activeFilterCount(f) === 0) {
+      set({ entries: [], visible: [], selected: new Set(), search: null, searching: false, patternError: null });
+      return;
+    }
+    set({ searching: true });
+    try {
+      const res = await api.search(params, f.tagIds, f.tagMode === "all");
+      if (token !== searchToken || res.stale || get().location !== SEARCH) return;
+      const entries = res.rows.map(([name, flags, size, modified, created, dir]) =>
+        enrich({ ...unpack([name, flags, size, modified, created]), path: join(res.dirs[dir], name) }, ""),
+      );
+      const { selected } = get();
+      const shown = new Set(entries.map((e) => e.path));
+      const kept = [...selected].filter((p) => shown.has(p));
+      set({
+        entries,
+        visible: entries,
+        selected: kept.length === selected.size ? selected : new Set(kept),
+        patternError: res.patternError,
+        search: { total: res.total, categories: res.categories, ready: res.ready, tookMs: res.tookMs },
+        searching: false,
+      });
+    } catch (e) {
+      if (token !== searchToken) return;
+      set({ searching: false });
+      get().toast(String(e), "error");
+    }
+  };
+
   /** Re-run filter (+ sort when needed); call after anything that changes entries, filters, view or meta. */
   const recompute = () => {
+    if (get().location === SEARCH) {
+      runSearch();
+      return;
+    }
     const { entries, filters, view, meta, selected } = get();
     const { visible, patternError } = applyFilters(sortedFor(entries, view), filters, view, meta);
     // Only visible items stay selected, so actions like Delete never touch files a filter hides.
@@ -141,6 +226,22 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       if (path === THIS_PC) {
         get().refreshDrives();
         view = normaliseView(null);
+      } else if (path === SEARCH) {
+        const [savedView, allMeta] = await Promise.all([
+          api.getFolderView(SEARCH).catch(() => null),
+          api.allMeta().catch(() => [] as MetaSummary[]),
+        ]);
+        meta = new Map(allMeta.map((m) => [pathKey(m.path), m]));
+        let parsed: Partial<FolderView> | null = null;
+        try {
+          parsed = savedView ? JSON.parse(savedView) : null;
+        } catch {
+          parsed = null;
+        }
+        view = searchView(parsed);
+        viewIsCustom = !!parsed;
+        // Rows stay on screen through a refresh; the search below replaces them.
+        entries = get().location === SEARCH ? get().entries : [];
       } else if (tagId != null) {
         const paths = await api.pathsWithTag(tagId);
         const raws = await api.statPaths(paths);
@@ -178,6 +279,11 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         selected.clear();
         selected.add(selectPath);
       }
+      let filters = sameFolder || prev.keepFilters ? prev.filters : EMPTY_FILTERS;
+      let lastSearchFilters = prev.lastSearchFilters;
+      if (location === SEARCH && !sameFolder) filters = prev.lastSearchFilters;
+      if (prev.location === SEARCH && !sameFolder) lastSearchFilters = prev.filters;
+      if (location === SEARCH) lastSearchKey = "";
       set({
         location,
         entries,
@@ -188,7 +294,9 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         selected,
         anchor: selectPath ?? (keepSelection && sameFolder ? prev.anchor : null),
         focus: selectPath ?? (keepSelection && sameFolder ? prev.focus : null),
-        filters: sameFolder || prev.keepFilters ? prev.filters : EMPTY_FILTERS,
+        filters,
+        lastSearchFilters,
+        ...(location !== SEARCH && { search: null, searching: false }),
       });
       recompute();
     } catch (e) {
@@ -220,6 +328,12 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     places: [],
     tags: [],
     toasts: [],
+    search: null,
+    searching: false,
+    searchScope: null,
+    searchOrigin: null,
+    lastSearchFilters: EMPTY_FILTERS,
+    indexStatus: null,
 
     init: async () => {
       const [places] = await Promise.all([api.getPlaces(), get().refreshDrives(), get().refreshTags()]);
@@ -290,12 +404,42 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       }
     },
 
+    openSearch: (query) => {
+      const { location, lastSearchFilters } = get();
+      if (location === SEARCH) {
+        if (query !== undefined) get().setFilters({ query });
+        return;
+      }
+      const next = query === undefined ? lastSearchFilters : { ...lastSearchFilters, query };
+      // Set now rather than when navigation lands, so a key typed in between isn't lost.
+      set({
+        lastSearchFilters: next,
+        filters: next,
+        searchScope: null,
+        searchOrigin: isVirtual(location) ? null : location,
+      });
+      get().navigate(SEARCH);
+    },
+
+    setSearchScope: (searchScope) => {
+      set({ searchScope });
+      recompute();
+    },
+
+    rerunSearch: () => {
+      if (get().location !== SEARCH) return;
+      lastSearchKey = "";
+      runSearch();
+    },
+
+    setIndexStatus: (indexStatus) => set({ indexStatus }),
+
     setView: (patch) => {
       const view = { ...get().view, ...patch };
       set({ view, viewIsCustom: true });
       recompute();
       const { location } = get();
-      if (isVirtual(location)) return;
+      if (isVirtual(location) && location !== SEARCH) return;
       window.clearTimeout(viewSaveTimer);
       viewSaveTimer = window.setTimeout(() => {
         api.setFolderView(location, JSON.stringify(view)).catch(console.error);
@@ -304,8 +448,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
     resetView: () => {
       const { location } = get();
-      if (!isVirtual(location)) api.clearFolderView(location).catch(console.error);
-      set({ view: normaliseView(null), viewIsCustom: false });
+      if (!isVirtual(location) || location === SEARCH) api.clearFolderView(location).catch(console.error);
+      set({ view: location === SEARCH ? searchView(null) : normaliseView(null), viewIsCustom: false });
       recompute();
     },
 
@@ -445,6 +589,11 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     refreshMeta: async () => {
       const { location, entries } = get();
       if (location === THIS_PC) return;
+      if (location === SEARCH) {
+        const all = await api.allMeta();
+        set({ meta: new Map(all.map((m) => [pathKey(m.path), m])) });
+        return;
+      }
       const parents = tagIdOf(location) != null
         ? [...new Set(entries.map((e) => parentOf(e.path)).filter((p): p is string => !!p))]
         : [location];

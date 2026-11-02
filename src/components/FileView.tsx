@@ -1,10 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, FileText, FolderOpen, SearchX, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, FolderOpen, Globe, Search, SearchX, TriangleAlert } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { typeLabel } from "../lib/fileTypes";
 import { activeFilterCount } from "../lib/filters";
-import { formatDate, formatSize } from "../lib/format";
-import { pathKey } from "../lib/path";
+import { formatDate, formatSize, numberFmt } from "../lib/format";
+import { SEARCH, parentOf, pathKey } from "../lib/path";
 import type { ColumnWidths, Entry, SortKey, Tag } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule, useSettings } from "../store/settings";
@@ -120,6 +120,7 @@ function useScrollToFocus(scrollToIndex: (i: number) => void, perRow = 1) {
 
 const COLUMNS: { key: keyof ColumnWidths; label: string; sort?: SortKey; align?: "right" }[] = [
   { key: "name", label: "Name", sort: "name" },
+  { key: "location", label: "Folder", sort: "folder" },
   { key: "modified", label: "Date modified", sort: "modified" },
   { key: "type", label: "Type", sort: "type" },
   { key: "size", label: "Size", sort: "size", align: "right" },
@@ -136,9 +137,11 @@ interface RowProps {
   tags: Tag[];
   compact: boolean;
   showTags: boolean;
+  /** Results come from all over, so each row says where it lives. */
+  showLocation: boolean;
 }
 
-const Row = memo(function Row({ entry, top, selected, focused, renaming, cut, tags, compact, showTags }: RowProps) {
+const Row = memo(function Row({ entry, top, selected, focused, renaming, cut, tags, compact, showTags, showLocation }: RowProps) {
   return (
     <div
       data-item
@@ -153,7 +156,7 @@ const Row = memo(function Row({ entry, top, selected, focused, renaming, cut, ta
         {renaming ? (
           <RenameInput entry={entry} />
         ) : (
-          <span className="name-text" title={entry.name}>
+          <span className="name-text" title={showLocation ? entry.path : entry.name}>
             {entry.name}
           </span>
         )}
@@ -161,6 +164,11 @@ const Row = memo(function Row({ entry, top, selected, focused, renaming, cut, ta
       </div>
       {!compact && (
         <>
+          {showLocation && (
+            <div className="cell dim" title={entry.path}>
+              {parentOf(entry.path)}
+            </div>
+          )}
           <div className="cell dim">{formatDate(entry.modified)}</div>
           <div className="cell dim">{typeLabel(entry.ext, entry.isDir)}</div>
           <div className="cell dim right">{entry.isDir ? "" : formatSize(entry.size)}</div>
@@ -179,11 +187,12 @@ const Row = memo(function Row({ entry, top, selected, focused, renaming, cut, ta
   );
 });
 
-function DetailsHeader({ widths, onResize, onResizeEnd, showTags }: {
+function DetailsHeader({ widths, onResize, onResizeEnd, showTags, showLocation }: {
   widths: ColumnWidths;
   onResize: (key: keyof ColumnWidths, w: number) => void;
   onResizeEnd: () => void;
   showTags: boolean;
+  showLocation: boolean;
 }) {
   const view = useExplorer((s) => s.view);
   const setView = useExplorer((s) => s.setView);
@@ -207,14 +216,14 @@ function DetailsHeader({ widths, onResize, onResizeEnd, showTags }: {
 
   return (
     <div className="row header">
-      {COLUMNS.filter((c) => showTags || c.key !== "tags").map((c) => (
+      {COLUMNS.filter((c) => (showTags || c.key !== "tags") && (showLocation || c.key !== "location")).map((c) => (
         <div
           key={c.key}
           className={`cell header-cell${c.align === "right" ? " right" : ""}${c.sort ? " sortable" : ""}`}
           onClick={() => {
             if (!c.sort) return;
             if (view.sortKey === c.sort) setView({ sortDir: view.sortDir === "asc" ? "desc" : "asc" });
-            else setView({ sortKey: c.sort, sortDir: c.sort === "name" || c.sort === "type" ? "asc" : "desc" });
+            else setView({ sortKey: c.sort, sortDir: c.sort === "modified" || c.sort === "size" ? "desc" : "asc" });
           }}
         >
           <span>{c.label}</span>
@@ -241,10 +250,14 @@ function RowsView({ compact }: { compact: boolean }) {
   const density = useSettings((s) => s.density);
   const metadataOn = useModule("metadata");
   // Only spend width on a Tags column when something in this folder is tagged.
-  const anyTagged = useExplorer((s) => {
-    for (const m of s.meta.values()) if (m.tagIds.length) return true;
+  const meta = useExplorer((s) => s.meta);
+  const showLocation = useExplorer((s) => s.location === SEARCH);
+  const anyTagged = useMemo(() => {
+    // A search holds the metadata of every file, not just of what's listed.
+    if (showLocation) return visible.some((e) => meta.get(pathKey(e.path))?.tagIds.length);
+    for (const m of meta.values()) if (m.tagIds.length) return true;
     return false;
-  });
+  }, [meta, visible, showLocation]);
   const showTags = metadataOn && !compact && anyTagged;
   const entryTags = useEntryTags();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -272,12 +285,14 @@ function RowsView({ compact }: { compact: boolean }) {
 
   const template = compact
     ? "minmax(0, 1fr)"
-    : [`minmax(140px, 1fr)`, `${widths.modified}px`, `${widths.type}px`, `${widths.size}px`]
+    : [`minmax(140px, 1fr)`]
+        .concat(showLocation ? [`${widths.location}px`] : [])
+        .concat([`${widths.modified}px`, `${widths.type}px`, `${widths.size}px`])
         .concat(showTags ? [`${widths.tags}px`] : [])
         .join(" ");
   const minWidth = compact
     ? undefined
-    : 140 + widths.modified + widths.type + widths.size + (showTags ? widths.tags : 0) + 36;
+    : 140 + (showLocation ? widths.location : 0) + widths.modified + widths.type + widths.size + (showTags ? widths.tags : 0) + 36;
 
   return (
     <div
@@ -293,6 +308,7 @@ function RowsView({ compact }: { compact: boolean }) {
           <DetailsHeader
             widths={widths}
             showTags={showTags}
+            showLocation={showLocation}
             onResize={(key, w) => setWidths((cur) => ({ ...cur, [key]: w }))}
             onResizeEnd={() => setView({ columns: widthsRef.current })}
           />
@@ -312,6 +328,7 @@ function RowsView({ compact }: { compact: boolean }) {
                 tags={entryTags(entry)}
                 compact={compact}
                 showTags={showTags}
+                showLocation={showLocation}
               />
             );
           })}
@@ -323,7 +340,7 @@ function RowsView({ compact }: { compact: boolean }) {
 
 // ------------------------------------------------------------------ grid
 
-const Tile = memo(function Tile({ entry, selected, focused, renaming, cut, tags, size, thumbs }: {
+const Tile = memo(function Tile({ entry, selected, focused, renaming, cut, tags, size, thumbs, showPath }: {
   entry: Entry;
   selected: boolean;
   focused: boolean;
@@ -332,6 +349,7 @@ const Tile = memo(function Tile({ entry, selected, focused, renaming, cut, tags,
   tags: Tag[];
   size: number;
   thumbs: boolean;
+  showPath: boolean;
 }) {
   return (
     <div
@@ -341,7 +359,7 @@ const Tile = memo(function Tile({ entry, selected, focused, renaming, cut, tags,
       onClick={(e) => handleItemClick(e, entry)}
       onDoubleClick={() => useExplorer.getState().open(entry)}
       onContextMenu={(e) => handleItemContextMenu(e, entry)}
-      title={entry.name}
+      title={showPath ? entry.path : entry.name}
     >
       <div className="tile-visual" style={{ width: size, height: size }}>
         {thumbs && entry.category === "image" ? (
@@ -371,6 +389,7 @@ function GridView() {
   const iconSize = useExplorer((s) => s.view.iconSize);
   const setGridColumns = useUi((s) => s.setGridColumns);
   const thumbs = useModule("thumbnails");
+  const showPath = useExplorer((s) => s.location === SEARCH);
   const entryTags = useEntryTags();
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -431,6 +450,7 @@ function GridView() {
                 tags={entryTags(entry)}
                 size={iconSize}
                 thumbs={thumbs}
+                showPath={showPath}
               />
             ))}
           </div>
@@ -442,6 +462,52 @@ function GridView() {
 
 // ------------------------------------------------------------------ container
 
+/** What a search shows when it has no rows, which depends on why. */
+function SearchEmpty() {
+  const search = useExplorer((s) => s.search);
+  const searching = useExplorer((s) => s.searching);
+  const status = useExplorer((s) => s.indexStatus);
+  const showHidden = useExplorer((s) => s.view.showHidden);
+  const scope = useExplorer((s) => s.searchScope);
+  const hasQuery = useExplorer((s) => activeFilterCount(s.filters) > 0);
+  const scanning = status?.state === "scanning";
+  const loading = !status || status.state === "loading" || status.state === "off" || (hasQuery && search?.ready === false);
+
+  if (loading) {
+    return (
+      <div className="empty-state overlay">
+        <Search size={32} className="empty-icon" />
+        <div className="empty-title">Loading the index…</div>
+      </div>
+    );
+  }
+  if (!hasQuery) {
+    return (
+      <div className="empty-state overlay">
+        <Search size={32} className="empty-icon" />
+        <div className="empty-title">Search {numberFmt.format(status.files)} indexed items</div>
+        <div className="empty-text">
+          Type part of a name. Use several words to narrow it down, "quotes" for an exact phrase, and docs\report to look
+          only in folders matching docs. The filter bar adds type, date, size and name patterns.
+          {scanning && " Indexing is still running, so more results will appear."}
+        </div>
+      </div>
+    );
+  }
+  if (searching || !search) return null;
+  return (
+    <div className="empty-state overlay">
+      <SearchX size={32} className="empty-icon" />
+      <div className="empty-title">No results</div>
+      <div className="empty-text">
+        {scanning
+          ? "Indexing is still running, so this may change as more files are found."
+          : `Nothing in ${scope ?? "the index"} matches this search.${showHidden ? "" : " Hidden files are left out; Ctrl+H includes them."}`}
+      </div>
+    </div>
+  );
+}
+
 export function FileView() {
   const mode = useExplorer((s) => s.view.mode);
   const error = useExplorer((s) => s.error);
@@ -452,6 +518,9 @@ export function FileView() {
   const refresh = useExplorer((s) => s.refresh);
   const clearFilters = useExplorer((s) => s.clearFilters);
   const showHidden = useExplorer((s) => s.view.showHidden);
+  const isSearch = useExplorer((s) => s.location === SEARCH);
+  const openSearch = useExplorer((s) => s.openSearch);
+  const searchOn = useModule("search");
 
   if (error) {
     return (
@@ -465,7 +534,9 @@ export function FileView() {
   }
 
   let empty: React.ReactNode = null;
-  if (!loading && shown === 0) {
+  if (isSearch) {
+    if (shown === 0) empty = <SearchEmpty />;
+  } else if (!loading && shown === 0) {
     if (total === 0) {
       empty = (
         <div className="empty-state overlay" onContextMenu={handleBackgroundContextMenu}>
@@ -480,6 +551,11 @@ export function FileView() {
           <div className="empty-title">No items match your filters</div>
           <div className="empty-text">{total} items in this folder are hidden by the current filters.</div>
           <button className="btn" onClick={clearFilters}>Clear filters</button>
+          {searchOn && filters.query.trim() && (
+            <button className="btn ghost" onClick={() => openSearch(filters.query)}>
+              <Globe size={13} /> Search everywhere for “{filters.query.trim()}”
+            </button>
+          )}
         </div>
       );
     } else if (!showHidden) {

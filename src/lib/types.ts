@@ -89,6 +89,35 @@ export interface TransferResult {
   errors: string[];
 }
 
+/** `[name, flags, size, modified, created, index into dirs]`, see `ResultRow` in index/mod.rs. */
+export type SearchRow = [string, number, number, number, number, number];
+
+export interface SearchResults {
+  rows: SearchRow[];
+  dirs: string[];
+  /** Matches found; `rows` holds the best of them. */
+  total: number;
+  categories: Partial<Record<Category, number>>;
+  patternError: string | null;
+  /** False while the index is still loading from disk. */
+  ready: boolean;
+  /** A newer search replaced this one. */
+  stale: boolean;
+  tookMs: number;
+}
+
+export interface IndexStatus {
+  state: "off" | "loading" | "scanning" | "idle";
+  files: number;
+  dirs: number;
+  foldersWalked: number;
+  skipped: number;
+  lastScan: number;
+  memoryBytes: number;
+  diskBytes: number;
+  roots: string[];
+}
+
 export interface TextPreview {
   text: string;
   encoding: string;
@@ -104,10 +133,12 @@ export interface AppInfo {
 }
 
 export type ViewMode = "details" | "list" | "grid";
-export type SortKey = "name" | "modified" | "created" | "size" | "type";
+/** "relevance" and "folder" only apply to search results. */
+export type SortKey = "name" | "modified" | "created" | "size" | "type" | "relevance" | "folder";
 
 export interface ColumnWidths {
   name: number;
+  location: number;
   modified: number;
   type: number;
   size: number;

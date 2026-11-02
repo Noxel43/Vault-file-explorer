@@ -5,6 +5,7 @@
   ChevronRight,
   Eye,
   FolderPlus,
+  Globe,
   LayoutGrid,
   List,
   PanelLeft,
@@ -18,7 +19,7 @@
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { activeFilterCount } from "../lib/filters";
-import { THIS_PC, crumbs, isVirtual, tagIdOf, type Crumb } from "../lib/path";
+import { SEARCH, THIS_PC, crumbs, isVirtual, tagIdOf, type Crumb } from "../lib/path";
 import type { ViewMode } from "../lib/types";
 import { useExplorer } from "../store/explorer";
 import { useModule, useSettings } from "../store/settings";
@@ -93,12 +94,14 @@ function PathBar() {
 
   const tagId = tagIdOf(location);
   let parts: (Crumb & { title?: string })[] =
-    tagId != null
-      ? [
-          { label: "Tags", path: "" },
-          { label: tags.find((t) => t.id === tagId)?.name ?? "Tag", path: location },
-        ]
-      : crumbs(location);
+    location === SEARCH
+      ? [{ label: "Search", path: SEARCH }]
+      : tagId != null
+        ? [
+            { label: "Tags", path: "" },
+            { label: tags.find((t) => t.id === tagId)?.name ?? "Tag", path: location },
+          ]
+        : crumbs(location);
   // Deep paths: keep the root, drive and last three folders; "…" opens the full path for editing.
   if (parts.length > 6) {
     const hidden = parts.slice(2, -3);
@@ -124,11 +127,17 @@ function PathBar() {
   );
 }
 
+/** Filters the open folder, or searches everything when there's no folder open or search is. */
 function SearchBox() {
   const query = useExplorer((s) => s.filters.query);
+  const location = useExplorer((s) => s.location);
   const setFilters = useExplorer((s) => s.setFilters);
+  const openSearch = useExplorer((s) => s.openSearch);
+  const searchOn = useModule("search");
   const token = useUi((s) => s.focusSearchToken);
+  const focusSearch = useUi((s) => s.focusSearch);
   const ref = useRef<HTMLInputElement>(null);
+  const searching = location === SEARCH || location === THIS_PC;
 
   useEffect(() => {
     if (token) ref.current?.select();
@@ -140,20 +149,37 @@ function SearchBox() {
       <input
         ref={ref}
         value={query}
-        placeholder="Filter this folder"
+        placeholder={searching ? "Search everything" : "Filter this folder"}
         spellCheck={false}
-        onChange={(e) => setFilters({ query: e.target.value })}
+        onChange={(e) => (location === THIS_PC ? openSearch(e.target.value) : setFilters({ query: e.target.value }))}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             setFilters({ query: "" });
             (e.target as HTMLInputElement).blur();
           }
-          if (e.key === "ArrowDown" || e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "ArrowDown" || e.key === "Enter") {
+            (e.target as HTMLInputElement).blur();
+            // Straight from typing to the top result, ready for Enter or the arrow keys.
+            const ex = useExplorer.getState();
+            if (location === SEARCH && !ex.focus) ex.moveFocus(1, false);
+          }
         }}
       />
       {query && (
         <button className="searchbox-clear" onClick={() => setFilters({ query: "" })} title="Clear">
           <X size={13} />
+        </button>
+      )}
+      {searchOn && !searching && (
+        <button
+          className="searchbox-global"
+          title="Search everywhere (Ctrl+K)"
+          onClick={() => {
+            openSearch(query);
+            focusSearch();
+          }}
+        >
+          <Globe size={13} />
         </button>
       )}
     </div>
@@ -171,6 +197,7 @@ export function Toolbar() {
   const filtersOn = useModule("filters");
   const metaOn = useModule("metadata");
   const previewOn = useModule("preview");
+  const searchOn = useModule("search");
   const previewOpen = useSettings((x) => x.previewOpen);
   const filterBarOpen = useSettings((x) => x.filterBarOpen);
   const sidebarOpen = useSettings((x) => x.sidebarOpen);
@@ -202,9 +229,9 @@ export function Toolbar() {
 
       <PathBar />
 
-      {filtersOn && !(s.location === THIS_PC) && (
+      {(searchOn || (filtersOn && s.location !== THIS_PC)) && <SearchBox />}
+      {filtersOn && s.location !== THIS_PC && (
         <>
-          <SearchBox />
           <IconButton
             title="Filters (Ctrl+Shift+F)"
             onClick={() => update({ filterBarOpen: !filterBarOpen })}

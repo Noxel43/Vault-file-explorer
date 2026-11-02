@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { CATEGORY_LABELS, type Category } from "../lib/fileTypes";
 import { activeFilterCount, type DatePreset, type Filters } from "../lib/filters";
 import { formatSize, numberFmt, parseSize } from "../lib/format";
+import { SEARCH } from "../lib/path";
 import { useExplorer } from "../store/explorer";
 import { useModule } from "../store/settings";
 import { FileIcon } from "./FileIcon";
@@ -19,11 +20,19 @@ function CheckRow({ checked, onClick, children }: { checked: boolean; onClick: (
 
 function TypeFilter({ filters, set }: { filters: Filters; set: (p: Partial<Filters>) => void }) {
   const entries = useExplorer((s) => s.entries);
+  const isSearch = useExplorer((s) => s.location === SEARCH);
+  const searchCounts = useExplorer((s) => s.search?.categories);
   const counts = useMemo(() => {
+    // A search only holds its best results, so the index counts the rest.
+    if (isSearch) {
+      const found = Object.entries(searchCounts ?? {}) as [Category, number][];
+      for (const t of filters.types) if (!searchCounts?.[t]) found.push([t, 0]);
+      return found.sort((a, b) => b[1] - a[1]);
+    }
     const c = new Map<Category, number>();
     for (const e of entries) c.set(e.category, (c.get(e.category) ?? 0) + 1);
     return [...c.entries()].sort((a, b) => b[1] - a[1]);
-  }, [entries]);
+  }, [entries, isSearch, searchCounts, filters.types]);
 
   const toggle = (cat: Category) =>
     set({ types: filters.types.includes(cat) ? filters.types.filter((t) => t !== cat) : [...filters.types, cat] });
@@ -202,6 +211,7 @@ export function FilterBar() {
   const patternError = useExplorer((s) => s.patternError);
   const total = useExplorer((s) => s.entries.length);
   const shown = useExplorer((s) => s.visible.length);
+  const isSearch = useExplorer((s) => s.location === SEARCH);
   const tagLibraryOn = useModule("tags");
   const metadataOn = useModule("metadata");
   const tagsOn = tagLibraryOn || metadataOn;
@@ -231,18 +241,20 @@ export function FilterBar() {
       {tagsOn && <TagFilter filters={filters} set={set} />}
 
       <div className="filterbar-spacer" />
-      {count > 0 && (
+      {count > 0 && !isSearch && (
         <span className="filter-count">
           {numberFmt.format(shown)} of {numberFmt.format(total)}
         </span>
       )}
-      <button
-        className={`icon-btn small${keep ? " active" : ""}`}
-        title={keep ? "Filters stay on when changing folders" : "Filters reset when changing folders"}
-        onClick={() => setKeep(!keep)}
-      >
-        {keep ? <Lock size={13} /> : <LockOpen size={13} />}
-      </button>
+      {!isSearch && (
+        <button
+          className={`icon-btn small${keep ? " active" : ""}`}
+          title={keep ? "Filters stay on when changing folders" : "Filters reset when changing folders"}
+          onClick={() => setKeep(!keep)}
+        >
+          {keep ? <Lock size={13} /> : <LockOpen size={13} />}
+        </button>
+      )}
       {count > 0 && (
         <button className="chip-btn" onClick={clear}>
           <X size={13} /> Clear

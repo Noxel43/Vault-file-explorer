@@ -46,6 +46,12 @@ export function useShortcuts() {
       if (e.altKey && key === "ArrowUp") return handled(ex.up);
       if (e.altKey && key.toLowerCase() === "p" && settings.enabled("preview"))
         return handled(() => settings.update({ previewOpen: !settings.previewOpen }));
+      if (((ctrl && key.toLowerCase() === "k") || key === "F3") && settings.enabled("search")) {
+        return handled(() => {
+          ex.openSearch();
+          ui.focusSearch();
+        });
+      }
       if (typing) return;
 
       const grid = ex.view.mode === "grid";

@@ -4,14 +4,33 @@ import type {
   DirListing,
   Drive,
   FileMeta,
+  IndexStatus,
   MetaSummary,
   Place,
   RawEntry,
+  SearchResults,
   Tag,
   TagWithCount,
   TextPreview,
   TransferResult,
 } from "./types";
+
+export interface SearchParams {
+  query: string;
+  pattern: string;
+  patternMode: string;
+  types: string[];
+  dateField: string;
+  dateFrom: number | null;
+  dateTo: number | null;
+  sizeMin: number | null;
+  sizeMax: number | null;
+  showHidden: boolean;
+  scope: string | null;
+  sortKey: string;
+  sortDir: string;
+  foldersFirst: boolean;
+}
 
 /** Thin typed wrappers over the Rust commands in src-tauri/src/lib.rs. */
 export const api = {
@@ -38,6 +57,14 @@ export const api = {
     invoke<TextPreview>("read_text_preview", { path, maxBytes }),
   fileThumbnail: (path: string, size: number) => invoke<ArrayBuffer>("file_thumbnail", { path, size }),
 
+  indexStart: (roots: string[], excludes: string[]) => invoke<void>("index_start", { roots, excludes }),
+  indexStop: () => invoke<void>("index_stop"),
+  indexRebuild: () => invoke<void>("index_rebuild"),
+  indexStatus: () => invoke<IndexStatus>("index_status"),
+  search: (params: SearchParams, tagIds: number[], matchAllTags: boolean) =>
+    invoke<SearchResults>("search", { params, tagIds, matchAllTags }),
+
+  allMeta: () => invoke<MetaSummary[]>("all_meta"),
   getMeta: (path: string) => invoke<FileMeta>("get_meta", { path }),
   setMeta: (path: string, description: string, keywords: string[], rating: number) =>
     invoke<FileMeta>("set_meta", { path, description, keywords, rating }),

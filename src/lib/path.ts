@@ -1,6 +1,7 @@
 /** Virtual locations that aren't real folders. */
 export const THIS_PC = "vault:this-pc";
 export const TAG_PREFIX = "vault:tag/";
+export const SEARCH = "vault:search";
 
 export const isVirtual = (p: string) => p.startsWith("vault:");
 export const tagLocation = (id: number) => `${TAG_PREFIX}${id}`;
