@@ -36,6 +36,9 @@ export interface AppSettings {
   panelOpen: boolean;
   panelWidth: number;
   filterBarOpen: boolean;
+  previewOpen: boolean;
+  previewWidth: number;
+  previewWrap: boolean;
 }
 
 const DEFAULTS: AppSettings = {
@@ -52,6 +55,9 @@ const DEFAULTS: AppSettings = {
   panelOpen: true,
   panelWidth: 300,
   filterBarOpen: false,
+  previewOpen: false,
+  previewWidth: 380,
+  previewWrap: false,
 };
 
 interface SettingsStore extends AppSettings {

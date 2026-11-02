@@ -27,6 +27,8 @@ interface UiStore {
   focusTagInputToken: number;
   /** Columns in the grid view, so arrow keys can move vertically. */
   gridColumns: number;
+  /** The preview pane was clicked last, so all arrow keys step through files one at a time. */
+  previewActive: boolean;
 
   openContextMenu: (m: ContextMenuState) => void;
   closeContextMenu: () => void;
@@ -38,6 +40,7 @@ interface UiStore {
   focusSearch: () => void;
   focusTagInput: () => void;
   setGridColumns: (n: number) => void;
+  setPreviewActive: (v: boolean) => void;
 }
 
 export const useUi = create<UiStore>((set, get) => ({
@@ -49,6 +52,7 @@ export const useUi = create<UiStore>((set, get) => ({
   focusSearchToken: 0,
   focusTagInputToken: 0,
   gridColumns: 1,
+  previewActive: false,
 
   openContextMenu: (contextMenu) => set({ contextMenu }),
   closeContextMenu: () => set({ contextMenu: null }),
@@ -60,4 +64,5 @@ export const useUi = create<UiStore>((set, get) => ({
   focusSearch: () => set({ focusSearchToken: get().focusSearchToken + 1 }),
   focusTagInput: () => set({ focusTagInputToken: get().focusTagInputToken + 1 }),
   setGridColumns: (gridColumns) => set({ gridColumns }),
+  setPreviewActive: (previewActive) => get().previewActive !== previewActive && set({ previewActive }),
 }));
