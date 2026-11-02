@@ -50,6 +50,15 @@ Add functionality to convert files from almost anything to almost anything, such
 # 7. Themes + modding
 Add a theme and addon system to VAULT. Themes are JSON + asset bundles (.vtheme files) that override CSS variables. Addons are sandboxed JS modules (.vaddon) with access to a defined API — they can add context menu items, toolbar buttons, and preview handlers. Build a mod manager UI for installing, enabling, and disabling both. For mods, add functionality for mods that could do loads of things, for example give preview support to a niche file or things like that.
 
+# 8. Tab bar
+Add a collapsible tab bar at the top of the window.
+
+# 9. Better right-click options
+Improve the context menu. Add a Shift + right-click menu that shows all the options.
+
+# 10. CAD engine
+Add a CAD engine for wider 3D model support in the preview pane, covering formats it can't show yet, such as STEP and IGES.
+
 ## Final steps
 Do these when finished totally
 - Create and publish the installer
